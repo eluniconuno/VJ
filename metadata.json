@@ -1,0 +1,7 @@
+{
+  "name": "CORRUPTED DATA // RESEARCH ENGINE",
+  "description": "An interactive artistic research tool for exploring data corruption, glitch art, and conceptual data merging. Features audio-reactive particle systems, datamosh feedback loops, and brutalist UI console.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

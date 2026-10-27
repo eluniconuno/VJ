@@ -225,6 +225,10 @@ export class AudioService {
     return this.recordingDestination?.stream || null;
   }
 
+  isAudioActive(): boolean {
+    return !!this.micSource || this.isPlaying;
+  }
+
   getAudioData(): AudioData {
     const fallbackSize = this.FFT_SIZE / 2;
     

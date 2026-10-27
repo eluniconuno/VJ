@@ -127,7 +127,8 @@ const CorruptionShader = {
         uMouse: { value: new THREE.Vector2(0.5, 0.5) },
         uCursors: { value: Array(8).fill(new THREE.Vector2(0.5, 0.5)) },
         uCursorCount: { value: 0 },
-        uInteraction: { value: 0.0 }
+        uInteraction: { value: 0.0 },
+        uMouseMode: { value: 0 }
     },
     vertexShader: `
         varying vec2 vUv;
@@ -144,6 +145,7 @@ const CorruptionShader = {
         uniform vec2 uCursors[8];
         uniform int uCursorCount;
         uniform float uInteraction;
+        uniform int uMouseMode;
 
         // Simplex noise helper
         vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -190,12 +192,20 @@ const CorruptionShader = {
             }
 
             // 3. Interaction
-            if (uInteraction > 0.0) {
+            if (uInteraction > 0.0 && uMouseMode != 4) {
                 // Main Mouse
                 vec2 mouseWorld = (uMouse - 0.5) * 100.0;
                 float d = distance(pos.xy, mouseWorld);
                 if (d < 30.0) {
-                    pos.z += (1.0 - d/30.0) * uInteraction * 15.0;
+                    float force = (1.0 - d/30.0) * uInteraction * 15.0;
+                    if (uMouseMode == 0 || uMouseMode == 3) {
+                        pos.z += force;
+                    } else if (uMouseMode == 1) {
+                        pos.z -= force * 0.8;
+                    } else if (uMouseMode == 2) {
+                        vec2 dir = normalize(pos.xy - mouseWorld);
+                        pos.xy += vec2(-dir.y, dir.x) * force * 0.2;
+                    }
                 }
 
                 // Ghost Cursors
@@ -205,7 +215,15 @@ const CorruptionShader = {
                         vec2 cWorld = (uCursors[i] - 0.5) * 100.0;
                         float dist = distance(pos.xy, cWorld);
                         if (dist < 20.0) {
-                            pos.z += (1.0 - dist / 20.0) * uInteraction * 10.0;
+                            float f = (1.0 - dist / 20.0) * uInteraction * 10.0;
+                            if (uMouseMode == 0 || uMouseMode == 3) {
+                                pos.z += f;
+                            } else if (uMouseMode == 1) {
+                                pos.z -= f * 0.8;
+                            } else if (uMouseMode == 2) {
+                                vec2 dir = normalize(pos.xy - cWorld);
+                                pos.xy += vec2(-dir.y, dir.x) * f * 0.2;
+                            }
                         }
                     }
                 }
@@ -263,6 +281,15 @@ const getShapeGeometry = (type: ShapeType): THREE.BufferGeometry => {
         case ShapeType.CUBE: return new THREE.BoxGeometry(1, 1, 1);
         case ShapeType.PYRAMID: return new THREE.ConeGeometry(1, 1, 4);
         case ShapeType.CYLINDER: return new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
+        case ShapeType.CUBE_GRID: return new THREE.BoxGeometry(1, 1, 1, 4, 4, 4);
+        case ShapeType.SPIKY_BALL: return new THREE.DodecahedronGeometry(1, 1);
+        case ShapeType.HEART: return new THREE.SphereGeometry(1, 16, 16);
+        case ShapeType.ROSE_CURVE: return new THREE.TorusGeometry(1, 0.2, 8, 50);
+        case ShapeType.MOBIUS_STRIP: return new THREE.TorusKnotGeometry(1, 0.3, 100, 16);
+        case ShapeType.SUPERFORMULA: return new THREE.IcosahedronGeometry(1, 2);
+        case ShapeType.CLIFFORD_ATTRACTOR: return new THREE.TorusKnotGeometry(1, 0.4, 100, 16);
+        case ShapeType.MANDELBULB: return new THREE.SphereGeometry(1, 32, 16);
+        case ShapeType.SACRED_MANDALA: return new THREE.TorusGeometry(1, 0.1, 16, 100);
         default: return new THREE.SphereGeometry(1, 32, 32);
     }
 };
@@ -330,7 +357,8 @@ const ParticleShader = {
         uCursorCount: { value: 0 },
         uInteractionIntensity: { value: 0.0 },
         uSentimentalIntensity: { value: 0.0 },
-        uLatentWarp: { value: 0.0 }
+        uLatentWarp: { value: 0.0 },
+        uMouseMode: { value: 0 }
     },
     vertexShader: `
         attribute vec3 color;
@@ -350,6 +378,7 @@ const ParticleShader = {
         uniform float uInteractionIntensity;
         uniform float uSentimentalIntensity;
         uniform float uLatentWarp;
+        uniform int uMouseMode;
 
         // Simplex-like noise for latent warping
         vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -394,14 +423,22 @@ const ParticleShader = {
             }
 
             // Interactive Mouse Displacement
-            if (uInteractionIntensity > 0.0) {
+            if (uInteractionIntensity > 0.0 && uMouseMode != 4) {
                 // Main Mouse
                 vec2 mouseWorld = (uMouse - 0.5) * 100.0;
                 float dist = distance(pos.xy, mouseWorld);
                 if (dist < 30.0) {
                     float force = (1.0 - dist / 30.0) * uInteractionIntensity * 20.0;
                     vec2 dir = normalize(pos.xy - mouseWorld);
-                    pos.xy += dir * force;
+                    if (uMouseMode == 0) {
+                        pos.xy += dir * force;
+                    } else if (uMouseMode == 1) {
+                        pos.xy -= dir * force * 0.8;
+                    } else if (uMouseMode == 2) {
+                        pos.xy += vec2(-dir.y, dir.x) * force;
+                    } else if (uMouseMode == 3) {
+                        pos.z += sin(dist * 0.5 - uTime * 8.0) * force * 0.8;
+                    }
                 }
 
                 // Ghost Cursors (Only if count > 0)
@@ -413,7 +450,15 @@ const ParticleShader = {
                         if (d < 20.0) {
                             float f = (1.0 - d / 20.0) * uInteractionIntensity * 15.0;
                             vec2 dir = normalize(pos.xy - cWorld);
-                            pos.xy += dir * f;
+                            if (uMouseMode == 0) {
+                                pos.xy += dir * f;
+                            } else if (uMouseMode == 1) {
+                                pos.xy -= dir * f * 0.8;
+                            } else if (uMouseMode == 2) {
+                                pos.xy += vec2(-dir.y, dir.x) * f;
+                            } else if (uMouseMode == 3) {
+                                pos.z += sin(d * 0.5 - uTime * 8.0) * f * 0.8;
+                            }
                         }
                     }
                 }
@@ -770,6 +815,7 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const animationId = useRef<number>();
   const controlsRef = useRef<OrbitControls | null>(null);
+  const previousSliderZoomRef = useRef<number>(60);
   
   // State Ref for the render loop
   const vjStateRef = useRef<VJState>(props.vjState);
@@ -1005,9 +1051,9 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
       obj.userData.layerId = layer.id;
       obj.visible = layer.visible;
       obj.scale.set(layer.scale, layer.scale, layer.scale);
-      // Map 0-100 to -50 to 50
-      const worldX = (layer.posX - 50);
-      const worldY = (layer.posY - 50);
+      // Centered at 0, 0
+      const worldX = layer.posX;
+      const worldY = layer.posY;
       obj.position.set(worldX, worldY, layer.posZ);
       obj.rotation.set(layer.rotX, layer.rotY, layer.rotZ);
       
@@ -1038,6 +1084,14 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
                 mat.uniforms.uLatentWarp.value = props.vjState.latentWarp;
                 mat.uniforms.uInteraction.value = props.vjState.mouseInteraction ? 1.0 : 0.0;
                 mat.uniforms.uMouse.value.copy(mousePosRef.current);
+                let lMouseMode = 0;
+                if (props.vjState.mouseMode === 'attract') lMouseMode = 1;
+                else if (props.vjState.mouseMode === 'vortex') lMouseMode = 2;
+                else if (props.vjState.mouseMode === 'wave') lMouseMode = 3;
+                else if (props.vjState.mouseMode === 'none') lMouseMode = 4;
+                if (mat.uniforms.uMouseMode) {
+                    mat.uniforms.uMouseMode.value = lMouseMode;
+                }
             }
             
             if (mat.uniforms.uDisplacement && !mat.uniforms.uDeformation) {
@@ -1055,7 +1109,7 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
         updateObjectProperties(obj, layer);
       }
     });
-  }, [props.vjState.mouseInteraction, props.vjState.deformationIntensity, props.vjState.displacementScale, props.vjState.sentimentalMode, props.vjState.latentWarp]);
+  }, [props.vjState.mouseInteraction, props.vjState.mouseMode, props.vjState.deformationIntensity, props.vjState.displacementScale, props.vjState.sentimentalMode, props.vjState.latentWarp]);
 
 
   useEffect(() => {
@@ -1079,7 +1133,10 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
         scene.fog = new THREE.FogExp2(0x000000, 0.02);
         sceneRef.current = scene;
 
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const initWidth = mountRef.current.clientWidth || 800;
+        const initHeight = mountRef.current.clientHeight || 450;
+
+        const camera = new THREE.PerspectiveCamera(75, initWidth / initHeight, 0.1, 1000);
         camera.position.z = 60;
         camera.position.y = 10;
         camera.lookAt(0,0,0);
@@ -1088,9 +1145,10 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
         renderer = new THREE.WebGLRenderer({ 
             antialias: false, 
             alpha: true,
-            powerPreference: 'high-performance'
+            powerPreference: 'high-performance',
+            preserveDrawingBuffer: true
         });
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(initWidth, initHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         mountRef.current.appendChild(renderer.domElement);
         rendererRef.current = renderer;
@@ -1143,6 +1201,28 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
         const points = new THREE.Points(geometry, pMaterial);
         scene.add(points);
 
+        const lineMaterial = new THREE.LineBasicMaterial({
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.85,
+            blending: THREE.AdditiveBlending
+        });
+        const lineSegments = new THREE.Line(geometry, lineMaterial);
+        lineSegments.visible = false;
+        scene.add(lineSegments);
+
+        const solidMaterial = new THREE.MeshBasicMaterial({
+            vertexColors: true,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.35,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide
+        });
+        const solidMesh = new THREE.Mesh(geometry, solidMaterial);
+        solidMesh.visible = false;
+        scene.add(solidMesh);
+
     // 5. POST PROCESSING COMPOSER
     const composer = new EffectComposer(renderer);
     const renderPass = new RenderPass(scene, camera);
@@ -1161,11 +1241,11 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
     effectPassRef.current = effectPass;
 
     // Create Feedback Targets
-    feedbackTarget1.current = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
-    feedbackTarget2.current = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
+    feedbackTarget1.current = new THREE.WebGLRenderTarget(initWidth, initHeight);
+    feedbackTarget2.current = new THREE.WebGLRenderTarget(initWidth, initHeight);
     
     // --- HELPER FUNCTIONS ---
-    const getTargetPos = (type: string, i: number, out: THREE.Vector3) => {
+    const getTargetPos = (type: string, i: number, out: THREE.Vector3, state: VJState) => {
         if (type === ShapeType.ORB) {
             const phi = Math.acos(1 - 2 * (i + 0.5) / PARTICLE_COUNT);
             const theta = Math.PI * (1 + Math.sqrt(5)) * (i + 0.5);
@@ -1348,6 +1428,125 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
                  const radius = Math.sqrt(Math.random()) * r; // Use random for solid caps
                  out.set(radius * Math.cos(angle), isTop ? h/2 : -h/2, radius * Math.sin(angle));
              }
+        } else if (type === ShapeType.CUBE_GRID) {
+             const side = Math.floor(Math.pow(PARTICLE_COUNT, 1/3));
+             const xGrid = i % side;
+             const yGrid = Math.floor(i / side) % side;
+             const zGrid = Math.floor(i / (side * side));
+             const spacing = 5.0;
+             out.set((xGrid - side/2) * spacing, (yGrid - side/2) * spacing, (zGrid - side/2) * spacing);
+        } else if (type === ShapeType.SPIKY_BALL) {
+             const phi = Math.acos(1 - 2 * (i + 0.5) / PARTICLE_COUNT);
+             const theta = Math.PI * (1 + Math.sqrt(5)) * (i + 0.5);
+             const r = (i % 15 === 0) ? 38 : 17;
+             out.set(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
+        } else if (type === ShapeType.HEART) {
+             const t = (i / PARTICLE_COUNT) * Math.PI * 2;
+             const xVal = 16 * Math.pow(Math.sin(t), 3);
+             const yVal = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+             const zVal = Math.sin(i * 12) * 6;
+             out.set(xVal * 1.5, yVal * 1.5, zVal);
+        } else if (type === ShapeType.ROSE_CURVE) {
+             const theta = (i / PARTICLE_COUNT) * Math.PI * 2 * 12;
+             const k = 6; 
+             const r = 24 * Math.cos(k * theta);
+             out.set(r * Math.cos(theta), r * Math.sin(theta), Math.sin(i * 0.1) * 8);
+        } else if (type === ShapeType.MOBIUS_STRIP) {
+             const u = (i / PARTICLE_COUNT) * Math.PI * 2;
+             const v = ((i % 100) / 100) * 2 - 1; 
+             const R = 22;
+             const xVal = (R + v * 8 * Math.cos(u / 2)) * Math.cos(u);
+             const yVal = (R + v * 8 * Math.cos(u / 2)) * Math.sin(u);
+             const zVal = v * 8 * Math.sin(u / 2);
+             out.set(xVal, yVal, zVal);
+        } else if (type === ShapeType.SUPERFORMULA) {
+             // 3D Gielis Superformula
+             const m = state.mathParamA !== undefined ? state.mathParamA : 4.0;
+             const n1 = state.mathParamB !== undefined ? state.mathParamB : 1.0;
+             const n2 = state.mathParamC !== undefined ? state.mathParamC : 1.0;
+             const n3 = state.mathParamD !== undefined ? state.mathParamD : 1.0;
+             
+             const phi = (i / PARTICLE_COUNT) * Math.PI - Math.PI / 2; // latitude: -PI/2 to PI/2
+             const theta = ((i % 100) / 100) * Math.PI * 2 - Math.PI; // longitude: -PI to PI
+             
+             const a = 1.0, b = 1.0;
+             const t1 = Math.abs(Math.cos(m * theta / 4.0) / a);
+             const t2 = Math.abs(Math.sin(m * theta / 4.0) / b);
+             const r1 = Math.pow(Math.pow(t1, n2) + Math.pow(t2, n3), -1.0 / n1);
+             
+             const t3 = Math.abs(Math.cos(m * phi / 4.0) / a);
+             const t4 = Math.abs(Math.sin(m * phi / 4.0) / b);
+             const r2 = Math.pow(Math.pow(t3, n2) + Math.pow(t4, n3), -1.0 / n1);
+             
+             const scaleVal = 22.0;
+             const xVal = scaleVal * r1 * Math.cos(theta) * r2 * Math.cos(phi);
+             const yVal = scaleVal * r1 * Math.sin(theta) * r2 * Math.cos(phi);
+             const zVal = scaleVal * r2 * Math.sin(phi);
+             out.set(xVal, yVal, zVal);
+        } else if (type === ShapeType.CLIFFORD_ATTRACTOR) {
+             // Lorenz Chaotic Attractor Map
+             const sigma = state.mathParamA !== undefined ? state.mathParamA : 10.0;
+             const rho = state.mathParamB !== undefined ? state.mathParamB : 28.0;
+             const beta = state.mathParamC !== undefined ? state.mathParamC : 2.666;
+             const scale = state.mathParamD !== undefined ? state.mathParamD * 0.9 : 0.9;
+             
+             let x = 0.1, y = 0.1, z = 0.1;
+             const dt = 0.01 + (i % 50) * 0.0001;
+             const steps = 15 + (i % 250);
+             for (let sVal = 0; sVal < steps; sVal++) {
+                 const dx = sigma * (y - x);
+                 const dy = x * (rho - z) - y;
+                 const dz = x * y - beta * z;
+                 x += dx * dt;
+                 y += dy * dt;
+                 z += dz * dt;
+             }
+             out.set(x * scale, y * scale, (z - rho/2.0) * scale);
+        } else if (type === ShapeType.MANDELBULB) {
+             // 3D Mandelbulb Fractal cloud
+             const n = state.mathParamA !== undefined ? state.mathParamA : 8.0;
+             const maxIt = Math.min(6, Math.max(1, Math.floor(state.mathParamB !== undefined ? state.mathParamB : 4.0)));
+             const fScale = state.mathParamC !== undefined ? state.mathParamC * 15.0 : 15.0;
+             const morph = state.mathParamD !== undefined ? state.mathParamD : 0.0;
+             
+             const phi = Math.acos(1.0 - 2.0 * (i + 0.5) / PARTICLE_COUNT);
+             const theta = Math.PI * (1.0 + Math.sqrt(5.0)) * (i + 0.5);
+             const rInit = 1.0;
+             
+             let x = rInit * Math.sin(phi) * Math.cos(theta);
+             let y = rInit * Math.sin(phi) * Math.sin(theta);
+             let z = rInit * Math.cos(phi);
+             
+             const cx = x, cy = y, cz = z;
+             for (let iter = 0; iter < maxIt; iter++) {
+                 const r = Math.sqrt(x*x + y*y + z*z);
+                 if (r > 2.0) break;
+                 
+                 let thetaSph = Math.atan2(Math.sqrt(x*x + y*y), z);
+                 let phiSph = Math.atan2(y, x);
+                 
+                 const rPower = Math.pow(r, n);
+                 thetaSph = thetaSph * n + morph;
+                 phiSph = phiSph * n;
+                 
+                 x = rPower * Math.sin(thetaSph) * Math.cos(phiSph) + cx;
+                 y = rPower * Math.sin(thetaSph) * Math.sin(phiSph) + cy;
+                 z = rPower * Math.cos(thetaSph) + cz;
+             }
+             out.set(x * fScale, y * fScale, z * fScale);
+        } else if (type === ShapeType.SACRED_MANDALA) {
+             // Sacred Geometry Mandala
+             const petals = state.mathParamA !== undefined ? state.mathParamA : 8.0;
+             const twist = state.mathParamB !== undefined ? state.mathParamB : 2.0;
+             const freq = state.mathParamC !== undefined ? state.mathParamC : 3.0;
+             const rScale = state.mathParamD !== undefined ? state.mathParamD * 20.0 : 20.0;
+             
+             const t = (i / PARTICLE_COUNT) * Math.PI * 2.0 * freq;
+             const r = rScale * (1.0 + 0.5 * Math.sin(petals * t));
+             const xVal = r * Math.cos(t + twist * Math.sin(t));
+             const yVal = r * Math.sin(t + twist * Math.sin(t));
+             const zVal = Math.sin(t * petals) * (rScale * 0.3);
+             out.set(xVal, yVal, zVal);
         } else {
              const s=60, c=Math.floor(Math.sqrt(PARTICLE_COUNT));
              out.set(((i%c)/c -0.5)*s, 0, (Math.floor(i/c)/c -0.5)*s);
@@ -1359,7 +1558,7 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
     const targetA = new THREE.Vector3();
     const targetB = new THREE.Vector3();
     for(let i=0; i<PARTICLE_COUNT; i++) {
-        getTargetPos(ShapeType.ORB, i, targetVector);
+        getTargetPos(ShapeType.ORB, i, targetVector, props.vjState);
         memory.basePositions[i*3] = targetVector.x;
         memory.basePositions[i*3+1] = targetVector.y;
         memory.basePositions[i*3+2] = targetVector.z;
@@ -1459,23 +1658,46 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
         
         // --- AUDIO DATA ---
         let bass=0, mid=0, treble=0, pulse=0, freq: Uint8Array | null = null, timeData: Uint8Array | null = null;
+        
+        // Let's pre-compute the ambient fallback so it's always ready
+        const ambientPulse = 0.15 + 0.15 * Math.sin(time * 2.5);
+        const ambientBass = 0.2 + 0.1 * Math.sin(time * 0.8);
+        const ambientMid = 0.15 + 0.08 * Math.sin(time * 1.15);
+        const ambientTreble = 0.12 + 0.06 * Math.sin(time * 1.75);
+
         if (currentState.audioReactive) {
             const d = audioService.getAudioData();
-            // Apply Audio Force (Global Amplitude)
             const force = currentState.audioForce; 
             
-            bass = d.bass * force * currentState.bassImpact; 
-            mid = d.mid * force; 
-            treble = d.treble * force * currentState.trebleImpact; 
-            pulse = d.pulse * force;
+            const rawBass = d.bass * force * currentState.bassImpact; 
+            const rawMid = d.mid * force; 
+            const rawTreble = d.treble * force * currentState.trebleImpact; 
+            const rawPulse = d.pulse * force;
             
-            // --- BPM SYNC INTEGRATION ---
+            // Blend real audio with a subtle ambient baseline, ensuring it never goes dead silent/static during quiet moments
+            bass = Math.max(rawBass, ambientBass * 0.3);
+            mid = Math.max(rawMid, ambientMid * 0.3);
+            treble = Math.max(rawTreble, ambientTreble * 0.3);
+            pulse = Math.max(rawPulse, ambientPulse * 0.3);
+            
             if (currentState.bpmSync) {
                 pulse = THREE.MathUtils.lerp(pulse, bpmPulse * force, 0.5);
             }
 
-            freq=d.frequencyData; 
-            timeData=d.timeData;
+            freq = d.frequencyData; 
+            timeData = d.timeData;
+        } else if (currentState.bpmSync) {
+            // BPM Sync is ON but audio input is off - pulse beautifully to the beat
+            pulse = bpmPulse;
+            bass = 0.25 + bpmPulse * 0.3;
+            mid = 0.2 + bpmPulse * 0.2;
+            treble = 0.15 + bpmPulse * 0.15;
+        } else {
+            // Use ambient fallback values
+            pulse = ambientPulse;
+            bass = ambientBass;
+            mid = ambientMid;
+            treble = ambientTreble;
         }
 
         // --- UPDATE MEDIA PLANE (BACKGROUND) ---
@@ -1493,27 +1715,67 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
 
         // --- CAMERA CONTROLS ---
         if (cameraRef.current && controlsRef.current) {
-             // 1. Zoom - Only apply from state if it's significantly different (UI change)
+             // 1. Zoom - Only apply from state if it changed via the UI slider
              const targetZoom = currentState.cameraZoom;
-             const currentZoom = cameraRef.current.position.distanceTo(controlsRef.current.target);
-             
-             // If the state was changed via slider, move the camera
-             // We use a small epsilon to avoid fighting the OrbitControls scroll
-             if (Math.abs(targetZoom - currentZoom) > 2.0 && !controlsRef.current.enabled) {
+             if (targetZoom !== previousSliderZoomRef.current) {
                  const dir = cameraRef.current.position.clone().sub(controlsRef.current.target).normalize();
                  cameraRef.current.position.copy(controlsRef.current.target).add(dir.multiplyScalar(targetZoom));
+                 previousSliderZoomRef.current = targetZoom;
+             } else {
+                 // Keep the ref updated with the distance in case the user manually scrolled
+                 const currentZoom = cameraRef.current.position.distanceTo(controlsRef.current.target);
+                 previousSliderZoomRef.current = currentZoom;
              }
 
              // 2. Auto Rotate
+             controlsRef.current.autoRotate = !!currentState.autoRotate;
+             controlsRef.current.autoRotateSpeed = (currentState.rotationSpeed ?? 1.0) * 4.0;
+
+             // Add rotation speed to particle points too
              if (currentState.autoRotate) {
-                 points.rotation.y += 0.005 * currentState.rotationSpeed * currentState.timeScale;
+                 const rotInc = 0.005 * currentState.rotationSpeed * currentState.timeScale;
+                 points.rotation.y += rotInc;
+                 lineSegments.rotation.y += rotInc;
+                 solidMesh.rotation.y += rotInc;
              }
 
-             // 3. Camera Shake
+             // --- ESCULTURA GEOMETRICA: POSIÇÃO E ZOOM ---
+             const scale3D = currentState.shape3DScale ?? 1.0;
+             const pX = currentState.geomPositionX ?? 0;
+             const pY = currentState.geomPositionY ?? 0;
+
+             points.scale.set(scale3D, scale3D, scale3D);
+             lineSegments.scale.set(scale3D, scale3D, scale3D);
+             solidMesh.scale.set(scale3D, scale3D, scale3D);
+
+             points.position.set(pX, pY, 0);
+             lineSegments.position.set(pX, pY, 0);
+             solidMesh.position.set(pX, pY, 0);
+
+             // --- ALTERNAR VISIBILIDADE DAS GEOMETRIAS ---
+             const dMode = currentState.drawingMode || 'points';
+             points.visible = (dMode === 'points');
+             lineSegments.visible = (dMode === 'lines' || dMode === 'spiral_lines');
+             solidMesh.visible = (dMode === 'massive' || dMode === 'wireframe');
+
+             if (dMode === 'wireframe') {
+                 (solidMesh.material as THREE.MeshBasicMaterial).wireframe = true;
+                 (solidMesh.material as THREE.MeshBasicMaterial).opacity = 0.45;
+             } else if (dMode === 'massive') {
+                 (solidMesh.material as THREE.MeshBasicMaterial).wireframe = false;
+                 (solidMesh.material as THREE.MeshBasicMaterial).opacity = 0.35;
+             }
+
+             // 3. Camera Shake - We shake the scene directly to avoid OrbitControls drift
              if (currentState.cameraShake > 0) {
-                 const shake = currentState.cameraShake * (0.1 + pulse * 0.2);
-                 cameraRef.current.position.x += (Math.random() - 0.5) * shake;
-                 cameraRef.current.position.y += (Math.random() - 0.5) * shake;
+                 const shake = currentState.cameraShake * (0.15 + pulse * 0.45) * 2.5;
+                 scene.position.set(
+                     (Math.random() - 0.5) * shake,
+                     (Math.random() - 0.5) * shake,
+                     (Math.random() - 0.5) * shake
+                 );
+             } else {
+                 scene.position.set(0, 0, 0);
              }
         }
 
@@ -1532,10 +1794,10 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
         for(let i=0; i<PARTICLE_COUNT; i++) {
             const idx = i*3;
             
-            getTargetPos(currentState.activeShape, i, targetA);
+            getTargetPos(currentState.activeShape, i, targetA, currentState);
             
             if (currentState.shapeMix > 0) {
-                getTargetPos(currentState.activeShapeB, i, targetB);
+                getTargetPos(currentState.activeShapeB, i, targetB, currentState);
                 
                 if (currentState.shapeMergeMode === ShapeMergeMode.LERP) {
                     targetA.lerp(targetB, currentState.shapeMix);
@@ -1557,6 +1819,85 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
             }
             
             targetVector.copy(targetA);
+
+            // --- GEOMETRIC SCULPTING DEFORMATIONS ---
+            // 1. Dimensional Scaling
+            targetVector.x *= currentState.shapeScaleX !== undefined ? currentState.shapeScaleX : 1.0;
+            targetVector.y *= currentState.shapeScaleY !== undefined ? currentState.shapeScaleY : 1.0;
+            targetVector.z *= currentState.shapeScaleZ !== undefined ? currentState.shapeScaleZ : 1.0;
+
+            // 2. Trigonometric Frequency Warping
+            const fX = currentState.shapeFreqX !== undefined ? currentState.shapeFreqX : 1.0;
+            const fY = currentState.shapeFreqY !== undefined ? currentState.shapeFreqY : 1.0;
+            const fZ = currentState.shapeFreqZ !== undefined ? currentState.shapeFreqZ : 1.0;
+            if (fX !== 1.0 || fY !== 1.0 || fZ !== 1.0) {
+                targetVector.x += Math.sin(targetVector.y * 0.1 * fX) * 2.0;
+                targetVector.y += Math.sin(targetVector.z * 0.1 * fY) * 2.0;
+                targetVector.z += Math.sin(targetVector.x * 0.1 * fZ) * 2.0;
+            }
+
+            // 3. Harmonic Modulation (distance modulation)
+            const modulation = currentState.shapeModulation !== undefined ? currentState.shapeModulation : 0.0;
+            if (modulation > 0) {
+                const len = targetVector.length();
+                if (len > 0.01) {
+                    const phi = Math.acos(THREE.MathUtils.clamp(targetVector.z / len, -1.0, 1.0));
+                    const theta = Math.atan2(targetVector.y, targetVector.x);
+                    const mod = 1.0 + modulation * 0.5 * Math.sin(phi * 8.0) * Math.cos(theta * 8.0);
+                    targetVector.multiplyScalar(mod);
+                }
+            }
+
+            // 4. Twist (rotation around Y-axis based on Y position)
+            const twist = currentState.shapeTwist !== undefined ? currentState.shapeTwist : 0.0;
+            if (twist !== 0) {
+                const angle = targetVector.y * twist * 0.05;
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+                const tx = targetVector.x * cos - targetVector.z * sin;
+                const tz = targetVector.x * sin + targetVector.z * cos;
+                targetVector.x = tx;
+                targetVector.z = tz;
+            }
+
+            // 5. Symmetry Mirroring
+            const symmetry = currentState.shapeSymmetry !== undefined ? currentState.shapeSymmetry : 1;
+            if (symmetry > 1) {
+                if (symmetry === 2) { // Binary Mirror
+                    targetVector.x = Math.abs(targetVector.x);
+                } else if (symmetry === 4) { // Radial 4-fold
+                    targetVector.x = Math.abs(targetVector.x);
+                    targetVector.z = Math.abs(targetVector.z);
+                } else if (symmetry === 8) { // 8-fold mandala symmetry
+                    targetVector.x = Math.abs(targetVector.x);
+                    targetVector.z = Math.abs(targetVector.z);
+                    if (targetVector.x < targetVector.z) {
+                        const tmp = targetVector.x;
+                        targetVector.x = targetVector.z;
+                        targetVector.z = tmp;
+                    }
+                }
+            }
+
+            // 6. Geometric Power Pinch/Inflate
+            const power = currentState.shapePower !== undefined ? currentState.shapePower : 1.0;
+            if (power !== 1.0 && power > 0) {
+                const len = targetVector.length();
+                if (len > 0.01) {
+                    const normalized = targetVector.clone().normalize();
+                    const newLen = Math.pow(len / 25.0, power) * 25.0;
+                    targetVector.copy(normalized.multiplyScalar(newLen));
+                }
+            }
+
+            // 7. Geometric Noise
+            const sNoise = currentState.shapeNoise !== undefined ? currentState.shapeNoise : 0.0;
+            if (sNoise > 0) {
+                const noiseVal = sNoise * 4.0;
+                targetVector.x += (Math.sin(targetVector.y * 0.2 + time) * noiseVal);
+                targetVector.y += (Math.cos(targetVector.z * 0.2 + time) * noiseVal);
+                targetVector.z += (Math.sin(targetVector.x * 0.2 + time) * noiseVal);
+            }
             
             // --- GEOMETRY ATTRACTION ---
             if (currentState.geometryAttraction > 0) {
@@ -1581,21 +1922,30 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
             let y = memory.basePositions[idx+1];
             let z = memory.basePositions[idx+2];
 
-            if (currentState.audioReactive && intensity > 0.01) {
+            // --- INTENSIDADE DE CAOS (CONCRETO E VISIVEL) ---
+            if (currentState.chaosIntensity > 0) {
+                // Reduced scaling from 2.5 to 0.4 for smooth, beautiful, and highly progressive chaos disorder
+                const ch = currentState.chaosIntensity * 0.4;
+                x += Math.sin(i * 0.13 + time * 6.5) * Math.cos(i * 0.07 + time * 3.0) * ch;
+                y += Math.cos(i * 0.09 + time * 5.2) * Math.sin(i * 0.11 + time * 4.0) * ch;
+                z += Math.sin(i * 0.05 + time * 7.1) * Math.cos(i * 0.17 + time * 3.5) * ch;
+            }            if (currentState.noiseMode !== NoiseType.NONE && intensity > 0.01) {
                  // We multiply noise effects by displacementScale
                  const ampFactor = intensity * dispScale; 
-
-                 if (currentState.noiseMode === NoiseType.WAVEFORM && timeData) {
-                     const audioIdx = Math.floor((i / PARTICLE_COUNT) * timeData.length);
-                     const wave = (timeData[audioIdx] / 128.0) - 1.0;
+                 const nFreq = currentState.noiseFrequency ?? 1.0; 
+ 
+                 if (currentState.noiseMode === NoiseType.WAVEFORM) {
+                     const wave = (timeData && timeData.length > 0) 
+                         ? ((timeData[Math.floor((i / PARTICLE_COUNT) * timeData.length)] / 128.0) - 1.0)
+                         : Math.sin(i * 0.05 * nFreq + time * 6.0) * 0.5;
                      const beatAmp = 1.0 + (pulse * 2.0); 
-
+ 
                      if (currentState.activeShape === ShapeType.PLANE || currentState.activeShape === ShapeType.GRID || currentState.activeShape === ShapeType.TERRAIN) {
-                         y += wave * 25 * ampFactor * beatAmp;
+                         y += wave * 10.0 * ampFactor * beatAmp;
                      } else {
                          const len = Math.sqrt(x*x + y*y + z*z);
                          if(len > 0.001) {
-                             const disp = wave * 15 * ampFactor * beatAmp;
+                             const disp = wave * 5.0 * ampFactor * beatAmp;
                              x += (x/len) * disp;
                              y += (y/len) * disp;
                              z += (z/len) * disp;
@@ -1604,32 +1954,37 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
                  } else if (currentState.noiseMode === NoiseType.PULSE) {
                     const d = Math.sqrt(x*x+y*y+z*z);
                     if (d>0.1) {
-                        const f = 1 + (pulse * ampFactor * 0.8);
+                        const f = 1.0 + (pulse * ampFactor * 0.4);
                         x*=f; y*=f; z*=f;
                     }
                  } else if (currentState.noiseMode === NoiseType.NOISE) {
-                    const amp = (treble + pulse * 0.5) * ampFactor * 5;
-                    x += (Math.random()-0.5)*amp;
-                    y += (Math.random()-0.5)*amp;
-                    z += (Math.random()-0.5)*amp;
+                    const noiseSpeed = time * 5.0 * nFreq;
+                    const baseNoise = Math.sin(i * 0.1 + noiseSpeed) * 0.2;
+                    const amp = (treble + pulse * 0.5 + Math.abs(baseNoise)) * ampFactor * 2.0;
+                    const rX = Math.sin(i * 123.456 + time) * 0.5;
+                    const rY = Math.cos(i * 456.789 + time) * 0.5;
+                    const rZ = Math.sin(i * 789.123 + time) * 0.5;
+                    x += rX * amp;
+                    y += rY * amp;
+                    z += rZ * amp;
                  } else if (currentState.noiseMode === NoiseType.VORTEX) {
-                    const ang = Math.atan2(z,x) + ((bass + pulse)*ampFactor*3);
+                    const ang = Math.atan2(z,x) + ((bass + pulse + 0.2) * ampFactor * 1.5 * nFreq);
                     const r = Math.sqrt(x*x+z*z);
                     x = r*Math.cos(ang);
                     z = r*Math.sin(ang);
-                    y += mid*20*ampFactor;
+                    y += (mid + 0.1) * 6.0 * ampFactor;
                  } else if (currentState.noiseMode === NoiseType.RIPPLE) {
                      const r1 = Math.sqrt(x*x + z*z); 
                      const r2 = Math.sqrt((x-10)*(x-10) + z*z);
-                     const ripple1 = Math.sin(r1 * 0.5 - time * 5) * ampFactor * 3;
-                     const ripple2 = Math.sin(r2 * 0.4 - time * 4) * ampFactor * 3;
-                     y += (ripple1 + ripple2) * (1 + pulse);
+                     const ripple1 = Math.sin(r1 * 0.5 * nFreq - time * 5.0) * ampFactor * 1.5;
+                     const ripple2 = Math.sin(r2 * 0.4 * nFreq - time * 4.0) * ampFactor * 1.5;
+                     y += (ripple1 + ripple2) * (1.0 + pulse);
                  } else if (currentState.noiseMode === NoiseType.HARMONICS) {
-                     const baseFreq = x * 0.2; 
-                     const h1 = Math.sin(baseFreq + time) * (bass * 30 * ampFactor);
-                     const h2 = Math.sin(baseFreq * 2 + time * 1.5) * (mid * 15 * ampFactor);
-                     const h3 = Math.sin(baseFreq * 3 + time * 2) * (treble * 10 * ampFactor);
-                     const sawtooth = ((x % 5) - 2.5) * ampFactor;
+                     const baseFreq = x * 0.2 * nFreq; 
+                     const h1 = Math.sin(baseFreq + time) * ((bass + 0.1) * 10.0 * ampFactor);
+                     const h2 = Math.sin(baseFreq * 2.0 + time * 1.5) * ((mid + 0.1) * 5.0 * ampFactor);
+                     const h3 = Math.sin(baseFreq * 3.0 + time * 2.0) * ((treble + 0.1) * 3.0 * ampFactor);
+                     const sawtooth = ((x % 5.0) - 2.5) * ampFactor;
                      if (currentState.activeShape === ShapeType.SPIRAL) {
                          const r = Math.sqrt(x*x + y*y);
                          const angle = Math.atan2(y, x);
@@ -1641,22 +1996,25 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
                      }
                  } else if (currentState.noiseMode === NoiseType.MESH_TEAR) {
                      const tearId = Math.floor(i / 100);
-                     const tearOffset = Math.sin(tearId + time) * 20 * ampFactor;
+                     const tearOffset = Math.sin(tearId * nFreq + time * 2.0) * 6.0 * ampFactor;
                      x += tearOffset * (pulse + 0.5);
-                     y += Math.cos(tearId * 0.5 + time) * 10 * ampFactor;
+                     y += Math.cos(tearId * 0.5 * nFreq + time) * 3.0 * ampFactor;
                  } else if (currentState.noiseMode === NoiseType.DATAMOSH) {
-                     const lag = Math.sin(i * 0.01 + time) > 0.8 ? 0 : 1;
-                     const smear = pulse * ampFactor * 50;
-                     x += (Math.random() - 0.5) * smear * lag;
-                     y += (Math.random() - 0.5) * smear * lag;
-                     z += (Math.random() - 0.5) * smear * lag;
+                     const lag = Math.sin(i * 0.01 * nFreq + time * 3.0) > 0.8 ? 0.0 : 1.0;
+                     const smear = (pulse + 0.2) * ampFactor * 15.0;
+                     const sX = Math.sin(i * 4.5 + time) * smear * lag;
+                     const sY = Math.cos(i * 7.8 + time) * smear * lag;
+                     const sZ = Math.sin(i * 2.1 + time) * smear * lag;
+                     x += sX;
+                     y += sY;
+                     z += sZ;
                  } else if (currentState.noiseMode === NoiseType.BIT_CRUSH) {
-                     const step = 5 / (ampFactor + 0.1);
+                     const step = 0.2 + (ampFactor * 1.5 * nFreq);
                      x = Math.round(x / step) * step;
                      y = Math.round(y / step) * step;
                      z = Math.round(z / step) * step;
                  } else if (currentState.noiseMode === NoiseType.TWIST) {
-                     const twistAmt = y * 0.05 * ampFactor * (1 + pulse);
+                     const twistAmt = y * 0.02 * ampFactor * (1.0 + pulse) * nFreq;
                      const ca = Math.cos(twistAmt);
                      const sa = Math.sin(twistAmt);
                      const nx = x * ca - z * sa;
@@ -1664,20 +2022,20 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
                      x = nx;
                      z = nz;
                  } else if (currentState.noiseMode === NoiseType.BEND) {
-                     const bendAmt = 0.01 * ampFactor * (1 + bass);
+                     const bendAmt = 0.003 * ampFactor * (1.0 + bass) * nFreq;
                      x += (y * y) * bendAmt;
                      z += (y * y) * bendAmt * 0.5;
                  } else if (currentState.noiseMode === NoiseType.STRETCH) {
-                     const stretch = 1.0 + (bass * ampFactor * 3.0);
+                     const stretch = 1.0 + ((bass + 0.1) * ampFactor * 1.5 * nFreq);
                      y *= stretch;
                      const squeeze = 1.0 / Math.sqrt(stretch);
                      x *= squeeze;
                      z *= squeeze;
                  } else if (currentState.noiseMode === NoiseType.SENTIMENTAL) {
-                     const speed = time * 0.5;
-                     x += Math.sin(y * 0.05 + speed) * 5 * ampFactor;
-                     y += Math.cos(x * 0.05 + speed) * 5 * ampFactor;
-                     z += Math.sin(z * 0.05 + speed) * 5 * ampFactor;
+                     const speed = time * 0.5 * nFreq;
+                     x += Math.sin(y * 0.05 + speed) * 2.0 * ampFactor;
+                     y += Math.cos(x * 0.05 + speed) * 2.0 * ampFactor;
+                     z += Math.sin(z * 0.05 + speed) * 2.0 * ampFactor;
                  }
             }
             
@@ -1686,25 +2044,81 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
 
             // Color Mapping
             let f = 0;
-            if (currentState.noiseMode === NoiseType.WAVEFORM && timeData) {
-                f = Math.abs((timeData[Math.floor((i / PARTICLE_COUNT) * timeData.length)] - 128) / 128.0) * 3.0;
+            if (currentState.noiseMode === NoiseType.WAVEFORM) {
+                const waveVal = (timeData && timeData.length > 0)
+                    ? Math.abs((timeData[Math.floor((i / PARTICLE_COUNT) * timeData.length)] - 128) / 128.0)
+                    : Math.abs(Math.sin(i * 0.05 + time * 4.0)) * 0.3;
+                f = waveVal * 3.0;
             } else if (currentState.noiseMode === NoiseType.RIPPLE) {
                 f = Math.abs(y) * 0.05;
             } else if (freq && freq.length > 0) {
                 const fIdx = Math.floor((i/PARTICLE_COUNT)*freq.length);
                 f = freq[fIdx] / 255.0;
+            } else {
+                f = 0.15 + 0.1 * Math.sin(i * 0.01 + time * 1.5);
             }
 
             const beatFlash = pulse * 0.5 * intensity; 
             
-            const r = THREE.MathUtils.lerp(colorDeep.r, colorElec.r, f*2 + 0.1 + beatFlash);
-            const g = THREE.MathUtils.lerp(colorDeep.g, colorElec.g, f*2 + 0.1 + beatFlash);
-            const b = THREE.MathUtils.lerp(colorDeep.b, colorElec.b, f*2 + 0.1 + beatFlash);
+            const r_orig = THREE.MathUtils.lerp(colorDeep.r, colorElec.r, f*2 + 0.1 + beatFlash);
+            const g_orig = THREE.MathUtils.lerp(colorDeep.g, colorElec.g, f*2 + 0.1 + beatFlash);
+            const b_orig = THREE.MathUtils.lerp(colorDeep.b, colorElec.b, f*2 + 0.1 + beatFlash);
+
+            let r = r_orig;
+            let g = g_orig;
+            let b = b_orig;
             
-            if (currentState.effectMode === EffectType.GLITCH && Math.random() > 0.98) {
-                colArr[idx] = 1.0;
-                colArr[idx+1] = 0.0;
-                colArr[idx+2] = 0.0;
+            // --- APLICAR PALETAS DJ PROFISSIONAIS ---
+            const palette = currentState.djColorPalette || 'default';
+            if (palette === 'cyberpunk') {
+                const tVal = (i / PARTICLE_COUNT) * Math.PI * 3 + time * 2.0;
+                r = Math.sin(tVal) * 0.45 + 0.55;
+                g = Math.cos(tVal * 0.4) * 0.15 + 0.1;
+                b = Math.sin(tVal * 1.2) * 0.35 + 0.65;
+            } else if (palette === 'acid_green') {
+                const val = Math.sin(i * 0.015 + time * 4.0) * 0.5 + 0.5;
+                r = val * 0.4;
+                g = 0.95 + pulse * 0.05;
+                b = 0.0;
+            } else if (palette === 'toxic_pink') {
+                const val = Math.cos(i * 0.02 + time * 4.5) * 0.3 + 0.7;
+                r = 0.95 + pulse * 0.05;
+                g = 0.0;
+                b = val;
+            } else if (palette === 'neon') {
+                const alt = Math.sin(i * 0.06 + time * 5.0);
+                if (alt > 0) {
+                    r = 0.0; g = 1.0; b = 1.0; // Neon Ciano
+                } else {
+                    r = 1.0; g = 0.45; b = 0.0; // Neon Laranja
+                }
+            } else if (palette === 'monochrome') {
+                const gray = (r_orig + g_orig + b_orig) / 3.0;
+                r = gray; g = gray; b = gray;
+            } else if (palette === 'dark_matter') {
+                r = 0.1 + pulse * 0.1;
+                g = 0.0;
+                b = 0.55 + Math.sin(i * 0.005) * 0.25;
+            } else if (palette === 'vaporwave') {
+                r = 0.92;
+                g = 0.52 + Math.sin(time * 0.8 + i * 0.001) * 0.18;
+                b = 0.82;
+            } else if (palette === 'inferno') {
+                r = 0.9 + pulse * 0.1;
+                g = 0.12 + Math.sin(i * 0.008 + time * 3.5) * 0.3;
+                b = 0.0;
+            }
+            
+            const glitchThreshold = 1.0 - (currentState.glitchFrequency ?? 0.2) * 0.08;
+            if (currentState.effectMode === EffectType.GLITCH && Math.random() > glitchThreshold) {
+                const noiseTypeSeed = Math.random();
+                if (noiseTypeSeed > 0.6) {
+                    colArr[idx] = 0.0; colArr[idx+1] = 1.0; colArr[idx+2] = 0.0; // Green Acid
+                } else if (noiseTypeSeed > 0.3) {
+                    colArr[idx] = 1.0; colArr[idx+1] = 0.0; colArr[idx+2] = 1.0; // Magenta
+                } else {
+                    colArr[idx] = 1.0; colArr[idx+1] = 1.0; colArr[idx+2] = 0.0; // Yellow Bright
+                }
             } else if (f > 0.6) {
                 colArr[idx] = THREE.MathUtils.lerp(r, 1.0, (f-0.6)*2);
                 colArr[idx+1] = THREE.MathUtils.lerp(g, 1.0, (f-0.6)*2);
@@ -1721,7 +2135,21 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
         if (particleMaterialRef.current) {
             const pMat = particleMaterialRef.current;
             pMat.uniforms.uTime.value = time;
-            pMat.uniforms.uPointSize.value = currentState.pointSize;
+            
+            // Map currentState.pointSize from user slider range [0.5, 10.0] to a perfect visible/crisp range [1.2, 3.2]
+            // At 0.5, the particles are at 1.2 (perfectly visible, crisp and not empty).
+            // From 2.0 (which previously bloated everything), the actual size is bounded smoothly to 1.8.
+            // At 10.0, the max size is bounded to 3.2, preventing overlap that blends into solid visual geometry shapes.
+            const rawSize = currentState.pointSize;
+            let mappedSize = 1.3;
+            if (rawSize <= 2.0) {
+                // Map [0.5, 2.0] -> [1.3, 1.6]
+                mappedSize = 1.3 + ((rawSize - 0.5) / 1.5) * 0.3;
+            } else {
+                // Map [2.0, 10.0] -> [1.6, 2.4]
+                mappedSize = 1.6 + ((rawSize - 2.0) / 8.0) * 0.8;
+            }
+            pMat.uniforms.uPointSize.value = mappedSize;
             pMat.uniforms.uBrightness.value = currentState.brightness;
             pMat.uniforms.uColor.value.set(currentState.color);
             pMat.uniforms.uAudioLow.value = bass;
@@ -1753,6 +2181,12 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
             pMat.uniforms.uInteractionIntensity.value = currentState.mouseInteraction ? 1.0 : 0.0;
             pMat.uniforms.uSentimentalIntensity.value = currentState.sentimentalMode ? currentState.absurdityIntensity : 0.0;
             pMat.uniforms.uLatentWarp.value = currentState.latentWarp;
+            let pMouseMode = 0;
+            if (currentState.mouseMode === 'attract') pMouseMode = 1;
+            else if (currentState.mouseMode === 'vortex') pMouseMode = 2;
+            else if (currentState.mouseMode === 'wave') pMouseMode = 3;
+            else if (currentState.mouseMode === 'none') pMouseMode = 4;
+            pMat.uniforms.uMouseMode.value = pMouseMode;
 
             // Find up to 3 layers marked as corpus
             const corpusLayers = currentState.layers.filter(l => l.isCorpus && (l.type === LayerType.IMAGE || l.type === LayerType.VIDEO)).slice(0, 3);
@@ -1882,27 +2316,123 @@ export const VJCanvas: React.FC<VJCanvasProps> = (props) => {
     }
 
     const handleResize = () => {
-        if(cameraRef.current && rendererRef.current && composerRef.current) {
-            const w = window.innerWidth;
-            const h = window.innerHeight;
+        if(mountRef.current && cameraRef.current && rendererRef.current && composerRef.current) {
+            const w = mountRef.current.clientWidth;
+            const h = mountRef.current.clientHeight;
+            if (w === 0 || h === 0) return;
             cameraRef.current.aspect = w/h;
             cameraRef.current.updateProjectionMatrix();
             rendererRef.current.setSize(w, h);
             composerRef.current.setSize(w, h);
+            if (feedbackTarget1.current) feedbackTarget1.current.setSize(w, h);
+            if (feedbackTarget2.current) feedbackTarget2.current.setSize(w, h);
+        }
+    };
+
+    let isDraggingShape = false;
+    let startDragX = 0;
+    let startDragY = 0;
+    let startShapeX = 0;
+    let startShapeY = 0;
+
+    const handleMouseDown = (e: MouseEvent) => {
+        if (e.shiftKey || e.button === 2 || e.button === 1) {
+            isDraggingShape = true;
+            startDragX = e.clientX;
+            startDragY = e.clientY;
+            startShapeX = vjStateRef.current?.geomPositionX ?? 0;
+            startShapeY = vjStateRef.current?.geomPositionY ?? 0;
+            if (controlsRef.current) {
+                controlsRef.current.enabled = false;
+            }
+            if (e.button === 2) {
+                e.preventDefault();
+            }
+        }
+    };
+
+    const handleMouseMoveDrag = (e: MouseEvent) => {
+        if (isDraggingShape) {
+            const dx = e.clientX - startDragX;
+            const dy = e.clientY - startDragY;
+            const factor = 0.12; 
+            const nX = startShapeX + dx * factor;
+            const nY = startShapeY - dy * factor;
+            props.setVjState(prev => ({
+                ...prev,
+                geomPositionX: nX,
+                geomPositionY: nY
+            }));
+        }
+    };
+
+    const handleMouseUp = () => {
+        if (isDraggingShape) {
+            isDraggingShape = false;
+            if (controlsRef.current) {
+                controlsRef.current.enabled = true;
+            }
+        }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+        e.preventDefault();
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+        if (e.shiftKey) {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            props.setVjState(prev => {
+                const newScale = Math.max(0.1, Math.min(5.0, (prev.shape3DScale ?? 1.0) + delta));
+                return { ...prev, shape3DScale: newScale };
+            });
         }
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-        mousePosRef.current.x = e.clientX / window.innerWidth;
-        mousePosRef.current.y = 1.0 - (e.clientY / window.innerHeight);
+        if (mountRef.current) {
+            const rect = mountRef.current.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                mousePosRef.current.x = (e.clientX - rect.left) / rect.width;
+                mousePosRef.current.y = 1.0 - ((e.clientY - rect.top) / rect.height);
+            }
+        }
     };
+
+    const resizeObserver = new ResizeObserver(() => {
+        handleResize();
+    });
+    if (mountRef.current) {
+        resizeObserver.observe(mountRef.current);
+    }
 
     window.addEventListener('resize', handleResize);
     window.addEventListener('mousemove', handleMouseMove);
 
+    if (mountRef.current) {
+        mountRef.current.addEventListener('mousedown', handleMouseDown);
+        mountRef.current.addEventListener('mousemove', handleMouseMoveDrag);
+        mountRef.current.addEventListener('mouseup', handleMouseUp);
+        mountRef.current.addEventListener('mouseleave', handleMouseUp);
+        mountRef.current.addEventListener('contextmenu', handleContextMenu);
+        mountRef.current.addEventListener('wheel', handleWheel, { passive: false });
+    }
+
     return () => {
+        resizeObserver.disconnect();
         window.removeEventListener('resize', handleResize);
         window.removeEventListener('mousemove', handleMouseMove);
+        
+        if (mountRef.current) {
+            mountRef.current.removeEventListener('mousedown', handleMouseDown);
+            mountRef.current.removeEventListener('mousemove', handleMouseMoveDrag);
+            mountRef.current.removeEventListener('mouseup', handleMouseUp);
+            mountRef.current.removeEventListener('mouseleave', handleMouseUp);
+            mountRef.current.removeEventListener('contextmenu', handleContextMenu);
+            mountRef.current.removeEventListener('wheel', handleWheel);
+        }
+
         if (animationId.current) cancelAnimationFrame(animationId.current);
         if (controls) controls.dispose(); 
         if (renderer) renderer.dispose();

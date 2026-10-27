@@ -1,34 +1,42 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { VJState, ShapeType, NoiseType, EffectType, TextAnimType, TextOverlayItem, LayerType, LayerItem, MergeMode, Clip, Deck, LFO, ShapeMergeMode } from '../types';
+import { BRUTALIST_STICKERS } from '../data/stickers';
 import { recordService } from '../services/recordService';
-import { Camera, Video, Eye, EyeOff, Settings, Maximize, Minimize, Plus, Trash2, Layers, Globe, Box, Database, Zap, Activity, Circle, Play, Save, RefreshCw } from 'lucide-react';
+import { Camera, Video, Eye, EyeOff, Settings, Maximize, Minimize, Plus, Trash2, Layers, Globe, Box, Database, Zap, Activity, Circle, Play, Save, RefreshCw, Smile, Sparkles, Heart, Lock, Unlock } from 'lucide-react';
 
 interface ControlsProps {
   vjState: VJState;
   setVjState: React.Dispatch<React.SetStateAction<VJState>>;
   audioService: any;
+  side: 'left' | 'right';
+  onClose?: () => void;
 }
 
-type Tab = 'MAIN' | 'AUDIO' | 'MOTION' | 'FX' | 'TEXT' | 'MEDIA' | 'LAYERS' | 'RESEARCH' | 'ARENA';
+type Tab = 'MAIN' | 'AUDIO' | 'MOTION' | 'FX' | 'TEXT' | 'MEDIA' | 'LAYERS' | 'STICKERS' | 'RESEARCH' | 'ARENA';
 
 const PRESET_FONTS = [
-  "Roboto Mono", "Orbitron", "Press Start 2P", "Monoton", "Creepster", 
-  "Rubik Glitch", "Bungee Shade", "Permanent Marker", "Syncopate", "Faster One"
+  "Space Grotesk", "Syne", "Shrikhand", "Orbitron", "Press Start 2P", 
+  "Monoton", "Creepster", "Rubik Glitch", "Rubik Mono One", "Alfa Slab One",
+  "Anton", "Bebas Neue", "Bungee", "Bungee Spice", "Bungee Outline", "Bungee Inline", "Bungee Shade",
+  "Rubik Doodle Shadow", "Righteous", "Shojumaru", "Ultra", "Unbounded", 
+  "Black Ops One", "Permanent Marker", "Syncopate", "Faster One", "Tektur", 
+  "Cabin Sketch", "Nabla", "Montserrat", "Playfair Display"
 ];
 
 const BLEND_MODES = ['normal', 'overlay', 'screen', 'difference', 'exclusion', 'multiply', 'color-dodge'];
 
-export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioService }) => {
+export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioService, side, onClose }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const layerFileInputRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('MAIN');
+  const [activeTab, setActiveTab] = useState<Tab>(side === 'left' ? 'LAYERS' : 'MAIN');
   const [uploadingForLayer, setUploadingForLayer] = useState<string | null>(null);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [midiActive, setMidiActive] = useState(false);
   const [midiDevices, setMidiDevices] = useState<string[]>([]);
   const [hasFile, setHasFile] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
 
   useEffect(() => {
     setMidiDevices(audioService.detectedMidiInputs);
@@ -91,6 +99,68 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
       ...prev,
       layers: prev.layers.map(l => l.id === id ? { ...l, ...updates } : l)
     }));
+  };
+
+  const duplicateLayer = (id: string) => {
+    const original = vjState.layers.find(l => l.id === id);
+    if (!original) return;
+    const newId = `layer_${Date.now()}`;
+    const clone: LayerItem = {
+      ...original,
+      id: newId,
+      name: original.name ? `${original.name} (Copy)` : `${original.type.toUpperCase()} Layer (Copy)`,
+      posX: Math.max(-100, Math.min(100, original.posX + 8)),
+      posY: Math.max(-100, Math.min(100, original.posY - 8)),
+      locked: false,
+    };
+    setVjState(prev => ({ ...prev, layers: [...prev.layers, clone] }));
+    showNotification('LAYER_DUPLICATED');
+  };
+
+  const bringToFront = (id: string) => {
+    setVjState(prev => {
+      const target = prev.layers.find(l => l.id === id);
+      if (!target) return prev;
+      const filtered = prev.layers.filter(l => l.id !== id);
+      return { ...prev, layers: [...filtered, target] };
+    });
+    showNotification('BROUGHT_TO_FRONT');
+  };
+
+  const sendToBack = (id: string) => {
+    setVjState(prev => {
+      const target = prev.layers.find(l => l.id === id);
+      if (!target) return prev;
+      const filtered = prev.layers.filter(l => l.id !== id);
+      return { ...prev, layers: [target, ...filtered] };
+    });
+    showNotification('SENT_TO_BACK');
+  };
+
+  const moveUp = (id: string) => {
+    setVjState(prev => {
+      const idx = prev.layers.findIndex(l => l.id === id);
+      if (idx === -1 || idx === prev.layers.length - 1) return prev;
+      const newLayers = [...prev.layers];
+      const temp = newLayers[idx];
+      newLayers[idx] = newLayers[idx + 1];
+      newLayers[idx + 1] = temp;
+      return { ...prev, layers: newLayers };
+    });
+    showNotification('MOVED_UP');
+  };
+
+  const moveDown = (id: string) => {
+    setVjState(prev => {
+      const idx = prev.layers.findIndex(l => l.id === id);
+      if (idx === -1 || idx === 0) return prev;
+      const newLayers = [...prev.layers];
+      const temp = newLayers[idx];
+      newLayers[idx] = newLayers[idx - 1];
+      newLayers[idx - 1] = temp;
+      return { ...prev, layers: newLayers };
+    });
+    showNotification('MOVED_DOWN');
   };
 
   const getVisualSnapshot = () => {
@@ -206,7 +276,12 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
       anim: TextAnimType.STATIC,
       blendMode: 'normal',
       outline: false,
-      opacity: 1
+      opacity: 1,
+      letterSpacing: 0,
+      rotation: 0,
+      glow: 20,
+      fontWeight: "900",
+      isItalic: false
     };
     setVjState(prev => ({ ...prev, textOverlays: [...prev.textOverlays, newLayer] }));
     setSelectedTextId(newId);
@@ -223,21 +298,65 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
     handleChange('micActive', newState);
   };
 
-  const toggleRecording = async () => {
-    if (vjState.isRecording) {
-      recordService.stopRecording();
-      handleChange('isRecording', false);
+  const startRecordingAction = async () => {
+    if (vjState.isRecording) return;
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+      const audioStream = audioService.getRecordingStream();
+      await recordService.startRecording(canvas, audioStream, false, vjState.videoFormat || 'desktop'); 
+      handleChange('isRecording', true);
     } else {
-      const canvas = document.querySelector('canvas');
-      if (canvas) {
-        const audioStream = audioService.getRecordingStream();
-        // Try Screen Capture first if user wants "phone screen" feel
-        // We can add a toggle for this later, but for now let's try to detect if we should use it
-        await recordService.startRecording(canvas, audioStream, false); 
-        handleChange('isRecording', true);
-      }
+      showNotification('Nenhum Canvas 3D encontrado para gravação!');
     }
   };
+
+  const stopRecordingAction = () => {
+    if (!vjState.isRecording) return;
+    recordService.stopRecording();
+    handleChange('isRecording', false);
+  };
+
+  useEffect(() => {
+    recordService.setListener({
+      onStart: () => {
+        showNotification('🎥 GRAVAÇÃO INICIADA! FAÇA SUA PERFORMANCE VJ...');
+      },
+      onStop: () => {
+        showNotification('💾 CAPTURA INTERNA DE VÍDEO CONCLUÍDA! COMPILANDO...');
+      },
+      onComplete: (filename) => {
+        showNotification(`✅ BAIXADO E ENVIADO COM SUCESSO PARA PASTA DOWNLOADS! (${filename})`);
+      },
+      onError: (err) => {
+        showNotification(`❌ ERRO DE GRAVAÇÃO: ${err}`);
+      }
+    });
+
+    return () => {
+      recordService.setListener(null);
+    };
+  }, []);
+
+  useEffect(() => {
+    let interval: any;
+    if (vjState.isRecording) {
+      setRecordingSeconds(0);
+      const startTime = Date.now();
+      interval = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        if (elapsed >= 20.0) {
+          setRecordingSeconds(20.0);
+          recordService.stopRecording();
+          handleChange('isRecording', false);
+        } else {
+          setRecordingSeconds(elapsed);
+        }
+      }, 100);
+    } else {
+      setRecordingSeconds(0);
+    }
+    return () => clearInterval(interval);
+  }, [vjState.isRecording]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -262,101 +381,167 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
   const standardEffects = Object.keys(EffectType).filter(k => isNaN(Number(k)) && (EffectType[k as keyof typeof EffectType] as unknown as number) > 0 && ((EffectType[k as keyof typeof EffectType] as unknown as number) <= 4 || (EffectType[k as keyof typeof EffectType] as unknown as number) === 16));
   const colorEffects = Object.keys(EffectType).filter(k => isNaN(Number(k)) && (EffectType[k as keyof typeof EffectType] as unknown as number) >= 5 && (EffectType[k as keyof typeof EffectType] as unknown as number) <= 15);
 
-  return (
-    <>
-      {/* BOTÃO DISCRETO PARA REEXIBIR UI */}
-      {!vjState.showUI && (
-        <button 
-          onClick={() => handleChange('showUI', true)}
-          className="fixed bottom-4 right-4 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md border border-white/20 flex items-center justify-center text-white/50 hover:text-white hover:bg-cyan-500/20 hover:border-cyan-500 transition-all z-50 shadow-lg"
-          title="Show UI"
-        >
-          <Settings size={18} />
-        </button>
-      )}
+  const leftTabs: Tab[] = ['LAYERS', 'STICKERS', 'TEXT', 'MEDIA', 'AUDIO'];
+  const rightTabs: Tab[] = ['MAIN', 'MOTION', 'FX', 'ARENA', 'RESEARCH'];
+  const filteredTabs = side === 'left' ? leftTabs : rightTabs;
 
-      {/* PAINEL FLUTUANTE ESQUERDO (DECK PRINCIPAL) */}
-      {vjState.showUI && (
-        <div className="fixed top-4 left-4 w-64 p-4 bg-black border-2 border-white text-xs font-mono text-white shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] z-40">
-          <div className="flex justify-between items-center mb-4 border-b-2 border-white pb-2">
-            <h1 className="text-sm font-black uppercase tracking-tighter">CORRUPTED DATA // RESEARCH</h1>
-            <div className="flex gap-2 items-center">
-              {midiActive && <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />}
-              <div className={`w-2 h-2 rounded-full ${vjState.isPlaying || vjState.micActive ? 'bg-[#2D70FF] animate-pulse' : 'bg-red-500'}`} />
-              <button 
-                onClick={() => handleChange('showUI', false)}
-                className="ml-2 text-gray-500 hover:text-white transition-colors"
-                title="Hide UI"
-              >
-                <EyeOff size={14} />
-              </button>
-            </div>
+  return (
+    <div className="w-full h-full flex flex-col overflow-hidden bg-black text-white text-xs font-mono">
+      {/* Header and status info with custom Tektur Font styling */}
+      <div className="p-3 border-b-2 border-white flex justify-between items-center bg-[#070707] select-none">
+        <div className="flex items-center gap-1.5 font-sans">
+          <Settings size={13} className="text-white animate-spin" />
+          <span style={{ fontFamily: 'Tektur, sans-serif' }} className="font-extrabold text-[10px] tracking-widest text-white">
+            {side === 'left' ? 'HTML // STRUCTURE' : 'CSS // EFFECTS & SPEED'}
+          </span>
+        </div>
+        <div className="flex gap-2 items-center text-[9px]">
+          {onClose && (
+            <button 
+              onClick={onClose} 
+              className="mr-1 bg-white text-black border border-black hover:bg-rose-500 hover:text-white font-extrabold text-[10px] px-1.5 py-0.5 transition-colors uppercase leading-none shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:translate-x-0.5 active:shadow-none"
+              title="Close Panel"
+            >
+              ✕ CLOSE
+            </button>
+          )}
+          <div className={`w-2 h-2 rounded-full ${vjState.isPlaying || vjState.micActive ? 'bg-[#22c55e] animate-pulse' : 'bg-rose-500'}`} />
+          <span className="font-bold text-[9px] text-gray-400">{vjState.isPlaying || vjState.micActive ? 'LIVE' : 'STANDBY'}</span>
+        </div>
+      </div>
+
+      {/* QUICK MASTER PANEL - Only rendered on right style panel as a CSS styling analog */}
+      {side === 'right' && (
+        <div className="p-3 border-b-2 border-white bg-[#0e0e0e]">
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <button 
+              onClick={toggleMic} 
+              className={`py-1.5 text-[9px] font-black border-2 transition-all shadow-[2px_2px_0px_0px_rgba(255,255,255,1)] ${vjState.micActive ? 'border-lime-400 bg-lime-400 text-black shadow-[2px_2px_0px_0px_rgba(163,230,53,0.4)]' : 'border-white text-white hover:bg-white hover:text-black'}`}
+            >
+              {vjState.micActive ? '● MIC_ON' : 'ENABLE_MIC'}
+            </button>
+            <button 
+              onClick={() => fileInputRef.current?.click()} 
+              className={`py-1.5 text-[9px] font-black border-2 transition-all shadow-[2px_2px_0px_0px_rgba(255,255,255,1)] ${vjState.isPlaying ? 'border-sky-400 bg-sky-400 text-black shadow-[2px_2px_0px_0px_rgba(56,189,248,0.4)]' : 'border-white text-white hover:bg-white hover:text-black'}`}
+            >
+              {vjState.isPlaying ? '● MP3_PLAY' : 'LOAD_MP3'}
+            </button>
+            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
           </div>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={toggleMic} className={`py-2 font-black border-2 transition-all ${vjState.micActive ? 'border-white bg-white text-black' : 'border-white/20 text-gray-500'}`}>MIC</button>
-              <button onClick={() => fileInputRef.current?.click()} className={`py-2 font-black border-2 transition-all ${vjState.isPlaying ? 'border-white bg-white text-black' : 'border-white/20 text-gray-500'}`}>MP3</button>
-              <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+          {/* PAINEL DE GRAVAÇÃO BRUTALISTA DE VÍDEO */}
+          <div className="mb-3 p-2 bg-rose-950/20 border border-rose-500/20 rounded">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[8px] font-black text-rose-400 uppercase tracking-widest flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${vjState.isRecording ? 'bg-red-500 animate-ping' : 'bg-rose-500/50'}`}></span>
+                Gravação de Vídeo (Máx 20s)
+              </span>
+              {vjState.isRecording && (
+                <span className="text-[8px] font-mono font-bold text-red-400 bg-red-950/80 px-1 rounded animate-pulse">
+                  {recordingSeconds.toFixed(1)}s / 20.0s
+                </span>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 gap-2">
+            {/* SELETOR DE FORMATO (PORTRAIT OU WIDESCREEN) */}
+            <div className="grid grid-cols-2 gap-1 mb-2">
               <button 
-                onClick={toggleRecording} 
-                className={`py-2 font-black border-2 transition-all flex items-center justify-center gap-2 ${vjState.isRecording ? 'border-red-600 bg-red-600 text-white animate-pulse' : 'border-white text-white hover:bg-white hover:text-black'}`}
+                onClick={() => handleChange('videoFormat', 'desktop')}
+                disabled={vjState.isRecording}
+                className={`py-1 text-[7.5px] font-black border uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  vjState.videoFormat !== 'mobile' 
+                    ? 'bg-rose-500/20 border-rose-500 text-white font-extrabold' 
+                    : 'border-white/10 text-gray-400 hover:text-white'
+                } ${vjState.isRecording ? 'opacity-40 cursor-not-allowed' : ''}`}
               >
-                <Video size={14} />
-                {vjState.isRecording ? 'TERMINATE_REC' : 'INITIATE_REC'}
+                🖥️ Desktop 16:9
+              </button>
+              <button 
+                onClick={() => handleChange('videoFormat', 'mobile')}
+                disabled={vjState.isRecording}
+                className={`py-1 text-[7.5px] font-black border uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  vjState.videoFormat === 'mobile' 
+                    ? 'bg-rose-500/20 border-rose-500 text-white font-extrabold' 
+                    : 'border-white/10 text-gray-400 hover:text-white'
+                } ${vjState.isRecording ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                📱 Mobile 9:16
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2">
+              <button 
+                onClick={startRecordingAction}
+                disabled={vjState.isRecording}
+                className={`py-1 text-[8.5px] font-black border uppercase transition-colors flex items-center justify-center gap-1 cursor-pointer ${vjState.isRecording ? 'opacity-40 border-white/10 text-gray-400 cursor-not-allowed' : 'border-rose-500 text-rose-400 hover:bg-rose-500 hover:text-white'}`}
+              >
+                <Circle size={8} fill="currentColor" />
+                Iniciar
+              </button>
+              <button 
+                onClick={stopRecordingAction}
+                disabled={!vjState.isRecording}
+                className={`py-1 text-[8.5px] font-black border uppercase transition-colors flex items-center justify-center gap-1 cursor-pointer ${!vjState.isRecording ? 'opacity-40 border-white/10 text-gray-400 cursor-not-allowed' : 'border-red-500 bg-red-600 text-white hover:bg-red-700'}`}
+              >
+                <div className="w-1.5 h-1.5 bg-current mr-0.5" />
+                Parar
               </button>
             </div>
 
-            <ControlSlider label="DATA_CHAOS" value={vjState.deformationIntensity} min={0} max={5} step={0.1} onChange={v => handleChange('deformationIntensity', v)} />
-            <ControlSlider label="SIGNAL_FLOW" value={vjState.animationSpeed} min={0} max={5} step={0.1} onChange={v => handleChange('animationSpeed', v)} />
-            <ControlSlider label="BIT_SCALE" value={vjState.pointSize} min={0.5} max={10} step={0.1} onChange={v => handleChange('pointSize', v)} />
-            
-            <button onClick={() => handleChange('showAdvancedPanel', !vjState.showAdvancedPanel)} className={`w-full py-2 border-2 font-black transition-all ${vjState.showAdvancedPanel ? 'bg-white text-black border-white' : 'bg-black border-white text-white hover:bg-white hover:text-black'}`}>
-              {vjState.showAdvancedPanel ? 'CLOSE_ENGINE' : 'ACCESS_ENGINE'}
-            </button>
+            {vjState.isRecording && (
+              <div className="mt-1.5 w-full bg-white/5 h-1 rounded overflow-hidden">
+                <div 
+                  className="bg-red-500 h-full transition-all duration-100" 
+                  style={{ width: `${(recordingSeconds / 20) * 100}%` }}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2 border-t border-white/20 pt-2">
+            <ControlSlider label="CHAOS_MORPH" value={vjState.deformationIntensity} min={0} max={5} step={0.1} onChange={v => handleChange('deformationIntensity', v)} />
+            <ControlSlider label="SIGNAL_SPEED" value={vjState.animationSpeed} min={0} max={5} step={0.1} onChange={v => handleChange('animationSpeed', v)} />
+            <ControlSlider label="PARTICLE_SIZE" value={vjState.pointSize} min={0.5} max={10} step={0.1} onChange={v => handleChange('pointSize', v)} />
           </div>
         </div>
       )}
 
-      {/* PAINEL AVANÇADO (TABS) */}
-      {vjState.showUI && vjState.showAdvancedPanel && (
-        <div className="fixed top-4 left-72 w-[500px] bg-black border-2 border-white text-xs font-mono text-white shadow-[8px_8px_0px_0px_rgba(255,255,255,1)] z-40 max-h-[90vh] flex overflow-hidden">
-          {/* SIDEBAR TABS */}
-          <div className="w-20 border-r-2 border-white flex flex-col bg-black">
-            {(['MAIN', 'AUDIO', 'MOTION', 'FX', 'TEXT', 'MEDIA', 'LAYERS', 'RESEARCH', 'ARENA'] as Tab[]).map(tab => (
-              <button 
-                key={tab} 
-                onClick={() => setActiveTab(tab)} 
-                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 px-1 text-[7px] font-black tracking-tighter transition-all border-b border-white/20 last:border-b-0 ${activeTab === tab ? 'bg-white text-black' : 'text-white hover:bg-white/10'}`}
-              >
-                {tab === 'MAIN' && <Zap size={14} />}
-                {tab === 'AUDIO' && <Activity size={14} />}
-                {tab === 'MOTION' && <Maximize size={14} />}
-                {tab === 'FX' && <Circle size={14} />}
-                {tab === 'TEXT' && <Plus size={14} />}
-                {tab === 'MEDIA' && <Video size={14} />}
-                {tab === 'LAYERS' && <Layers size={14} />}
-                {tab === 'RESEARCH' && <Database size={14} />}
-                {tab === 'ARENA' && <RefreshCw size={14} />}
-                <span>{tab}</span>
-              </button>
-            ))}
-          </div>
+      {/* DETAILED TABS AND CONTROLLERS PANEL */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* SIDEBAR DOCK LABELS */}
+        <div className="w-16 border-r-2 border-white flex flex-col bg-[#050505] overflow-y-auto no-scrollbar py-1">
+          {filteredTabs.map(tab => (
+            <button 
+              key={tab} 
+              onClick={() => setActiveTab(tab)} 
+              className={`py-3 px-1 text-[8px] font-black tracking-tight transition-all border-b border-white/10 flex flex-col items-center gap-1.5 text-center ${activeTab === tab ? 'bg-white text-black font-black' : 'text-gray-400 hover:bg-white/10'}`}
+            >
+              {tab === 'MAIN' && <Zap size={11} />}
+              {tab === 'AUDIO' && <Activity size={11} />}
+              {tab === 'MOTION' && <Maximize size={11} />}
+              {tab === 'FX' && <Circle size={11} />}
+              {tab === 'STICKERS' && <Smile size={11} />}
+              {tab === 'TEXT' && <Plus size={11} />}
+              {tab === 'MEDIA' && <Video size={11} />}
+              {tab === 'LAYERS' && <Layers size={11} />}
+              {tab === 'RESEARCH' && <Database size={11} />}
+              {tab === 'ARENA' && <RefreshCw size={11} />}
+              <span>{tab}</span>
+            </button>
+          ))}
+        </div>
 
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-2 border-b-2 border-white bg-white/5 flex justify-between items-center">
-              <span className="text-[9px] font-black uppercase tracking-widest">{activeTab} // ENGINE_MODULE</span>
-              <div className="flex gap-1">
-                <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
-                <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-              </div>
+        {/* CONTAINER CONTENT */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-[#0a0a0a]">
+          <div className="p-2 border-b-2 border-white bg-white/5 flex justify-between items-center select-none font-sans">
+            <span style={{ fontFamily: 'Tektur, sans-serif' }} className="text-[9px] font-extrabold uppercase tracking-widest text-[#22c55e]">{activeTab} // DIRECTIVE</span>
+            <div className="flex gap-1.5">
+              <div className="w-1.5 h-1.5 bg-[#22c55e] rounded-full"></div>
+              <div className="w-1.5 h-1.5 bg-fuchsia-500 rounded-full animate-ping"></div>
             </div>
-            
-            <div className="p-4 overflow-y-auto custom-scrollbar flex-1">
+          </div>
+          
+          <div className="p-3 overflow-y-auto custom-scrollbar flex-1 space-y-4">
             
             {/* ABA ARENA: CLIP MATRIX & CROSSFADER */}
             {activeTab === 'ARENA' && (
@@ -719,7 +904,7 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
                   {vjState.layers.map((layer, idx) => (
                     <div key={layer.id} className="p-3 bg-white/5 border border-white/10 rounded-lg space-y-3">
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-bold uppercase text-[#2D70FF]">{layer.type} #{idx}</span>
+                        <span className="text-[10px] font-bold uppercase text-[#2D70FF]">{layer.name || `${layer.type.toUpperCase()} #${idx}`}</span>
                         <div className="flex gap-2">
                           <button 
                             onClick={() => updateLayer(layer.id, { isCorpus: !layer.isCorpus })} 
@@ -746,6 +931,64 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
                         </div>
                       </div>
 
+                      {/* Name / Rename property */}
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-[7.5px] uppercase tracking-wider text-gray-500">RENAME LAYER</span>
+                        <input 
+                          type="text" 
+                          value={layer.name || ''} 
+                          onChange={(e) => updateLayer(layer.id, { name: e.target.value })}
+                          placeholder={`${layer.type.toUpperCase()} Layer الاسم`}
+                          className="bg-black/50 border border-white/10 rounded px-2 py-1 text-[10px] focus:border-[#2D70FF] outline-none font-bold text-lime-400"
+                        />
+                      </div>
+
+                      {/* Adobe Illustrator Layer Depth / Lock / Clone utility bar */}
+                      <div className="flex flex-wrap gap-1 border-t border-b border-white/10 py-2">
+                        <button 
+                          onClick={() => updateLayer(layer.id, { locked: !layer.locked })} 
+                          className={`px-1.5 py-0.5 rounded text-[8px] font-bold border flex items-center gap-1 ${layer.locked ? 'bg-rose-500/20 border-rose-500 text-rose-500 font-extrabold' : 'border-white/10 text-gray-400 hover:text-white'}`}
+                          title="Lock Position Dragging"
+                        >
+                          {layer.locked ? <Lock size={9} /> : <Unlock size={9} />}
+                          {layer.locked ? 'LOCKED' : 'LOCK'}
+                        </button>
+                        <button 
+                          onClick={() => duplicateLayer(layer.id)} 
+                          className="px-1.5 py-0.5 rounded text-[8px] font-bold border border-white/10 text-gray-400 hover:text-white"
+                        >
+                          CLONE
+                        </button>
+                        <button 
+                          onClick={() => bringToFront(layer.id)} 
+                          className="px-1.5 py-0.5 rounded text-[8px] font-bold border border-white/10 text-gray-400 hover:text-white"
+                          title="Bring to Top"
+                        >
+                          FRONT
+                        </button>
+                        <button 
+                          onClick={() => sendToBack(layer.id)} 
+                          className="px-1.5 py-0.5 rounded text-[8px] font-bold border border-white/10 text-gray-400 hover:text-white"
+                          title="Send to Bottom"
+                        >
+                          BACK
+                        </button>
+                        <button 
+                          onClick={() => moveUp(layer.id)} 
+                          className="px-1.5 py-0.5 rounded text-[8px] font-bold border border-white/10 text-gray-400 hover:text-white"
+                          title="Move Forward"
+                        >
+                          ▲ UP
+                        </button>
+                        <button 
+                          onClick={() => moveDown(layer.id)} 
+                          className="px-1.5 py-0.5 rounded text-[8px] font-bold border border-white/10 text-gray-400 hover:text-white"
+                          title="Move Backward"
+                        >
+                          ▼ DWN
+                        </button>
+                      </div>
+
                       {layer.type === LayerType.SHAPE && (
                         <div className="grid grid-cols-2 gap-1">
                           {Object.values(ShapeType).slice(0, 8).map(s => (
@@ -763,7 +1006,7 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
                       {layer.type !== LayerType.PARTICLES && (
                         <div className="space-y-2">
                           <div className="flex flex-col gap-1">
-                            <span className="text-[8px] uppercase text-gray-500">Source URL</span>
+                            <span className="text-[8px] uppercase text-gray-500 font-bold">Source URL</span>
                             <div className="flex gap-1">
                               <input 
                                 type="text" 
@@ -786,13 +1029,41 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
                         </div>
                       )}
 
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                        <ControlSlider label="Opacity" value={layer.opacity} min={0} max={1} step={0.01} onChange={v => updateLayer(layer.id, { opacity: v })} />
-                        <ControlSlider label="Scale" value={layer.scale} min={0.1} max={50} step={0.1} onChange={v => updateLayer(layer.id, { scale: v })} />
-                        <ControlSlider label="Pos X" value={layer.posX} min={-100} max={100} step={1} onChange={v => updateLayer(layer.id, { posX: v })} />
-                        <ControlSlider label="Pos Y" value={layer.posY} min={-100} max={100} step={1} onChange={v => updateLayer(layer.id, { posY: v })} />
-                        <ControlSlider label="Pos Z" value={layer.posZ} min={-100} max={100} step={1} onChange={v => updateLayer(layer.id, { posZ: v })} />
-                        <ControlSlider label="Distort" value={layer.distortion || 0} min={0} max={5} step={0.1} onChange={v => updateLayer(layer.id, { distortion: v })} />
+                      {/* Dimensions, Scale, Positioning & Brand New Image Crop Slider system */}
+                      <div className="space-y-2.5 pt-1">
+                        <div className="space-y-1">
+                          <span className="text-[7.5px] uppercase font-bold text-gray-500 tracking-wider">Transforms & Sizing</span>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                            <ControlSlider label="Opacity" value={layer.opacity} min={0} max={1} step={0.01} onChange={v => updateLayer(layer.id, { opacity: v })} />
+                            <ControlSlider label="Scale Propor." value={layer.scale} min={0.1} max={5} step={0.05} onChange={v => updateLayer(layer.id, { scale: v })} />
+                            <ControlSlider label="Stretch Width (scaleX)" value={layer.scaleX !== undefined ? layer.scaleX : 1.0} min={0.1} max={4} step={0.05} onChange={v => updateLayer(layer.id, { scaleX: v })} />
+                            <ControlSlider label="Stretch Height (scaleY)" value={layer.scaleY !== undefined ? layer.scaleY : 1.0} min={0.1} max={4} step={0.05} onChange={v => updateLayer(layer.id, { scaleY: v })} />
+                            <ControlSlider label="Pos X (%)" value={layer.posX} min={-100} max={100} step={1} onChange={v => updateLayer(layer.id, { posX: v })} />
+                            <ControlSlider label="Pos Y (%)" value={layer.posY} min={-100} max={100} step={1} onChange={v => updateLayer(layer.id, { posY: v })} />
+                            <ControlSlider label="Rot Z (Deg)" value={layer.rotZ || 0} min={0} max={360} step={1} onChange={v => updateLayer(layer.id, { rotZ: v })} />
+                            <ControlSlider label="Pos Z" value={layer.posZ} min={-100} max={100} step={1} onChange={v => updateLayer(layer.id, { posZ: v })} />
+                          </div>
+                        </div>
+
+                        {layer.type === LayerType.IMAGE && (
+                          <div className="space-y-1 border-t border-white/10 pt-2.5">
+                            <span className="text-[7.5px] uppercase font-bold text-fuchsia-400 tracking-wider">✂ Image Cropping (Cortar Lados)</span>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                              <ControlSlider label="Crop Left (%)" value={layer.cropLeft || 0} min={0} max={90} step={1} onChange={v => updateLayer(layer.id, { cropLeft: v })} />
+                              <ControlSlider label="Crop Right (%)" value={layer.cropRight || 0} min={0} max={90} step={1} onChange={v => updateLayer(layer.id, { cropRight: v })} />
+                              <ControlSlider label="Crop Top (%)" value={layer.cropTop || 0} min={0} max={90} step={1} onChange={v => updateLayer(layer.id, { cropTop: v })} />
+                              <ControlSlider label="Crop Bottom (%)" value={layer.cropBottom || 0} min={0} max={90} step={1} onChange={v => updateLayer(layer.id, { cropBottom: v })} />
+                            </div>
+                            <div className="flex justify-end pt-1">
+                              <button 
+                                onClick={() => updateLayer(layer.id, { cropLeft: 0, cropRight: 0, cropTop: 0, cropBottom: 0 })}
+                                className="text-[7px] text-red-400 hover:text-white hover:bg-rose-950 px-1 py-0.5 border border-red-500/20 font-black uppercase text-right"
+                              >
+                                Reset Crop Borders
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -941,14 +1212,60 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
                     </button>
                   </div>
                   <div className="grid grid-cols-2 gap-1">
-                    {Object.keys(NoiseType).filter(k => isNaN(Number(k))).map(key => (
-                      <button key={key} onClick={() => handleChange('noiseMode', NoiseType[key as any])} className={`text-left px-2 py-1.5 border rounded text-[10px] transition-all ${vjState.noiseMode === NoiseType[key as any] ? 'bg-purple-900 border-purple-500 text-white' : 'border-white/10 text-gray-600 hover:text-gray-400'}`}>{key.replace('_', ' ')}</button>
-                    ))}
+                    {Object.keys(NoiseType).filter(k => isNaN(Number(k))).map(key => {
+                      const modeVal = NoiseType[key as any] as any;
+                      return (
+                        <button 
+                          key={key} 
+                          onClick={() => {
+                            handleChange('noiseMode', modeVal);
+                            if (modeVal !== NoiseType.NONE && vjState.deformationIntensity < 0.8) {
+                              handleChange('deformationIntensity', 1.5);
+                            }
+                          }} 
+                          className={`text-left px-2 py-1.5 border rounded text-[10px] transition-all ${vjState.noiseMode === modeVal ? 'bg-purple-900 border-purple-500 text-white' : 'border-white/10 text-gray-600 hover:text-gray-400'}`}
+                        >
+                          {key.replace('_', ' ')}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
                 <div className="space-y-3">
+                  <ControlSlider label="Deformation Intensity" value={vjState.deformationIntensity} min={0} max={5} step={0.1} onChange={v => handleChange('deformationIntensity', v)} />
                   <ControlSlider label="Data Displacement" value={vjState.displacementScale} min={0} max={3} step={0.1} onChange={v => handleChange('displacementScale', v)} />
+                  
+                  {/* DJ MODULATORS BLOCK */}
+                  <h3 className="text-yellow-500 font-bold mt-4 mb-2 uppercase tracking-widest border-b border-yellow-900/50 pb-1">DJ Modulators & Glitch</h3>
+                  <ControlSlider label="Deformation Freq" value={vjState.noiseFrequency} min={0.1} max={5.0} step={0.1} onChange={v => handleChange('noiseFrequency', v)} />
+                  <ControlSlider label="Chaos Disorder" value={vjState.chaosIntensity} min={0} max={10.0} step={0.2} onChange={v => handleChange('chaosIntensity', v)} />
+                  <ControlSlider label="Glitch Speed/Freq" value={vjState.glitchFrequency} min={0.0} max={1.0} step={0.05} onChange={v => handleChange('glitchFrequency', v)} />
+
+                  {/* DJ COLOR PALETTE BLOCK */}
+                  <h3 className="text-[#2D70FF] font-bold mt-4 mb-2 uppercase tracking-widest border-b border-blue-900/50 pb-1">DJ Color Palettes</h3>
+                  <div className="grid grid-cols-3 gap-1 mb-2">
+                    {[
+                      { id: 'default', label: 'Default' },
+                      { id: 'cyberpunk', label: 'Cyberpunk' },
+                      { id: 'acid_green', label: 'Acid Green' },
+                      { id: 'toxic_pink', label: 'Toxic Pink' },
+                      { id: 'neon', label: 'Neon Dual' },
+                      { id: 'monochrome', label: 'B&W Mono' },
+                      { id: 'dark_matter', label: 'Dark Matter' },
+                      { id: 'vaporwave', label: 'Vaporwave' },
+                      { id: 'inferno', label: 'Inferno' }
+                    ].map(pal => (
+                      <button 
+                        key={pal.id} 
+                        onClick={() => handleChange('djColorPalette', pal.id)} 
+                        className={`py-1 border rounded uppercase text-[7px] transition-all truncate ${vjState.djColorPalette === pal.id ? 'bg-[#2D70FF]/25 border-[#2D70FF] text-white' : 'border-white/10 text-gray-500 hover:text-white'}`}
+                      >
+                        {pal.label}
+                      </button>
+                    ))}
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] uppercase text-gray-500">Technical Overlay</span>
                     <input type="checkbox" checked={vjState.showTechnicalOverlay} onChange={e => handleChange('showTechnicalOverlay', e.target.checked)} className="accent-[#2D70FF]" />
@@ -958,6 +1275,84 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
                     <input type="checkbox" checked={vjState.autoMorph} onChange={e => handleChange('autoMorph', e.target.checked)} className="accent-[#2D70FF]" />
                   </div>
                   <input type="color" value={vjState.color} onChange={e => handleChange('color', e.target.value)} className="w-full h-8 bg-transparent border border-white/20 rounded cursor-pointer" />
+
+                  {/* DYNAMIC SCULPTING & MOUSE BEHAVIORS */}
+                  <h3 className="text-cyan-400 font-bold mt-5 mb-2 uppercase tracking-widest border-b border-cyan-900/50 pb-1">Dynamic Math Sculpting</h3>
+                  
+                  <div className="bg-white/5 border border-white/10 p-3 rounded-lg space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <ControlSlider label="Scale X" value={vjState.shapeScaleX ?? 1.0} min={0.1} max={3.0} step={0.05} onChange={v => handleChange('shapeScaleX', v)} />
+                      <ControlSlider label="Scale Y" value={vjState.shapeScaleY ?? 1.0} min={0.1} max={3.0} step={0.05} onChange={v => handleChange('shapeScaleY', v)} />
+                      <ControlSlider label="Scale Z" value={vjState.shapeScaleZ ?? 1.0} min={0.1} max={3.0} step={0.05} onChange={v => handleChange('shapeScaleZ', v)} />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <ControlSlider label="Freq X" value={vjState.shapeFreqX ?? 1.0} min={0.1} max={10.0} step={0.1} onChange={v => handleChange('shapeFreqX', v)} />
+                      <ControlSlider label="Freq Y" value={vjState.shapeFreqY ?? 1.0} min={0.1} max={10.0} step={0.1} onChange={v => handleChange('shapeFreqY', v)} />
+                      <ControlSlider label="Freq Z" value={vjState.shapeFreqZ ?? 1.0} min={0.1} max={10.0} step={0.1} onChange={v => handleChange('shapeFreqZ', v)} />
+                    </div>
+
+                    <ControlSlider label="Harmonic Modulation" value={vjState.shapeModulation ?? 0.0} min={0.0} max={2.0} step={0.05} onChange={v => handleChange('shapeModulation', v)} />
+                    <ControlSlider label="Geometric Twist" value={vjState.shapeTwist ?? 0.0} min={-5.0} max={5.0} step={0.1} onChange={v => handleChange('shapeTwist', v)} />
+                    <ControlSlider label="Sculpting Power" value={vjState.shapePower ?? 1.0} min={0.1} max={4.0} step={0.05} onChange={v => handleChange('shapePower', v)} />
+                    <ControlSlider label="Structural Noise" value={vjState.shapeNoise ?? 0.0} min={0.0} max={3.0} step={0.05} onChange={v => handleChange('shapeNoise', v)} />
+
+                    <div className="space-y-1">
+                      <span className="text-[8px] uppercase text-gray-500 font-bold block">Symmetry Mirroring</span>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[
+                          { id: 1, label: 'None' },
+                          { id: 2, label: 'Binary' },
+                          { id: 4, label: 'Quad' },
+                          { id: 8, label: 'Mandala' }
+                        ].map(sym => (
+                          <button
+                            key={sym.id}
+                            onClick={() => handleChange('shapeSymmetry', sym.id)}
+                            className={`py-1 rounded border uppercase text-[8px] font-black transition-all ${vjState.shapeSymmetry === sym.id ? 'bg-cyan-500/25 border-cyan-500 text-cyan-300' : 'border-white/10 text-gray-500 hover:text-white'}`}
+                          >
+                            {sym.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* MATHEMATICAL SHAPE EQUATION PARAMETERS */}
+                  <h3 className="text-yellow-500 font-bold mt-5 mb-2 uppercase tracking-widest border-b border-yellow-900/50 pb-1">Equation Sculpting</h3>
+                  <div className="bg-white/5 border border-white/10 p-3 rounded-lg space-y-3 font-mono">
+                    <div className="text-[8px] text-gray-400 mb-1">COORDINATES: SUPERFORMULA, ATTRACTOR, MANDELBULB, MANDALA</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <ControlSlider label="Param A (Symmetry)" value={vjState.mathParamA ?? 4.0} min={0.1} max={20.0} step={0.1} onChange={v => handleChange('mathParamA', v)} />
+                      <ControlSlider label="Param B (Attractor Depth)" value={vjState.mathParamB ?? 1.0} min={0.1} max={28.0} step={0.1} onChange={v => handleChange('mathParamB', v)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <ControlSlider label="Param C (Freq/Iteration)" value={vjState.mathParamC ?? 1.0} min={0.1} max={15.0} step={0.1} onChange={v => handleChange('mathParamC', v)} />
+                      <ControlSlider label="Param D (Scale factor)" value={vjState.mathParamD ?? 1.0} min={0.1} max={10.0} step={0.1} onChange={v => handleChange('mathParamD', v)} />
+                    </div>
+                  </div>
+
+                  {/* INTERACTIVE MOUSE BEHAVIORS */}
+                  <h3 className="text-pink-500 font-bold mt-5 mb-2 uppercase tracking-widest border-b border-pink-900/50 pb-1">Tactile Mouse Behavior</h3>
+                  <div className="bg-white/5 border border-white/10 p-3 rounded-lg space-y-3">
+                    <div className="grid grid-cols-5 gap-1">
+                      {[
+                        { id: 'repel', label: 'Repel' },
+                        { id: 'attract', label: 'Attract' },
+                        { id: 'vortex', label: 'Vortex' },
+                        { id: 'wave', label: '3D Wave' },
+                        { id: 'none', label: 'Disable' }
+                      ].map(mode => (
+                        <button
+                          key={mode.id}
+                          onClick={() => handleChange('mouseMode', mode.id)}
+                          className={`py-1 rounded border uppercase text-[7px] font-black transition-all ${vjState.mouseMode === mode.id ? 'bg-pink-500/25 border-pink-500 text-pink-300' : 'border-white/10 text-gray-500 hover:text-white'}`}
+                        >
+                          {mode.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -992,6 +1387,42 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
                   <input type="checkbox" checked={vjState.mouseInteraction} onChange={e => handleChange('mouseInteraction', e.target.checked)} className="accent-yellow-500 w-4 h-4" />
                 </div>
                 
+                {/* ADVANCED SCULPTURE SPACE CONTROLS */}
+                <h3 className="text-cyan-500 font-bold mb-2 mt-4 uppercase tracking-widest border-b border-cyan-900/50 pb-1">3D Sculpture Space</h3>
+                
+                <div className="space-y-2">
+                  <span className="text-[9px] uppercase text-gray-500 block font-mono">Drawing Representation:</span>
+                  <div className="grid grid-cols-2 gap-1">
+                    {[
+                      { id: 'points', label: 'Points' },
+                      { id: 'lines', label: 'Wires' },
+                      { id: 'massive', label: 'Solid' },
+                      { id: 'wireframe', label: 'Grid mesh' }
+                    ].map(m => (
+                      <button 
+                        key={m.id} 
+                        onClick={() => handleChange('drawingMode', m.id)} 
+                        className={`py-1 rounded border uppercase text-[8px] font-black transition-all ${vjState.drawingMode === m.id ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300' : 'border-white/10 text-gray-500 hover:text-white'}`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <ControlSlider label="Sculpture Zoom" value={vjState.shape3DScale} min={0.1} max={4.0} step={0.05} onChange={v => handleChange('shape3DScale', v)} />
+                <div className="grid grid-cols-2 gap-2">
+                  <ControlSlider label="Offset X" value={vjState.geomPositionX} min={-50} max={50} step={0.5} onChange={v => handleChange('geomPositionX', v)} />
+                  <ControlSlider label="Offset Y" value={vjState.geomPositionY} min={-50} max={50} step={0.5} onChange={v => handleChange('geomPositionY', v)} />
+                </div>
+
+                {/* NEOBRUTALIST HANDS-ON INTERACTIVE BOX */}
+                <div className="p-2 border border-yellow-500/30 bg-yellow-500/5 rounded font-mono text-[8px] leading-tight text-yellow-400/80 uppercase">
+                  <div className="font-black text-yellow-400 mb-1">● TACTILE INTERACTIONS (VJ GESTURES)</div>
+                  <div>1. <span className="text-yellow-300 font-black">DRAG / MOVEMENT:</span> Hold <span className="text-white">SHIFT + LEFT CLICK</span> or <span className="text-white">RIGHT CLICK</span> on viewport and drag to translate the main shape.</div>
+                  <div className="mt-1">2. <span className="text-yellow-300 font-black">DIRECT ZOOM:</span> Hold <span className="text-white">SHIFT + WHEEL SCROLL</span> to rescale 3D sculpture uniformly.</div>
+                </div>
+
                 <h3 className="text-orange-500 font-bold mb-2 mt-4 uppercase tracking-widest border-b border-orange-900/50 pb-1">Camera</h3>
                 <ControlSlider label="Zoom" value={vjState.cameraZoom} min={10} max={150} step={1} onChange={v => handleChange('cameraZoom', v)} />
                 <ControlSlider label="Rotation" value={vjState.rotationSpeed} min={-2} max={2} step={0.1} onChange={v => handleChange('rotationSpeed', v)} />
@@ -1026,6 +1457,55 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
               </div>
             )}
 
+            {/* ABA STICKERS: BRUTALIST AND GEOMETRIC VECTOR COLLAGES */}
+            {activeTab === 'STICKERS' && (
+              <div className="space-y-4">
+                <div className="text-[9px] text-gray-400 uppercase tracking-wide mb-2 leading-tight font-mono">
+                  TAP A RETRO STICKER TO SPAWN IT ON THE INTERACTIVE CANVAS VIEWPORT. CLICK AND DRAG ON SCREEN TO REPOSITION.
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  {BRUTALIST_STICKERS.map(sticker => (
+                    <button
+                      key={sticker.id}
+                      onClick={() => {
+                        const newId = `sticker_${Date.now()}`;
+                        const newLayer: LayerItem = {
+                          id: newId,
+                          type: LayerType.IMAGE,
+                          url: sticker.id,
+                          visible: true,
+                          opacity: 1.0,
+                          scale: 2.0,
+                          posX: (Math.random() - 0.5) * 40,
+                          posY: (Math.random() - 0.5) * 40,
+                          posZ: 0,
+                          rotX: 0,
+                          rotY: 0,
+                          rotZ: Math.floor(Math.random() * 40) - 20,
+                          isCorrupted: false,
+                          isCorpus: false,
+                          blendMode: 'normal'
+                        };
+                        setVjState(prev => ({
+                          ...prev,
+                          layers: [...prev.layers, newLayer]
+                        }));
+                        showNotification(`SPAWNED_${sticker.id.toUpperCase()}`);
+                      }}
+                      className="p-3 bg-[#0a0a0a] border-2 border-white hover:border-fuchsia-400 text-left transition-all flex flex-col justify-between hover:bg-zinc-90 w-full shadow-[2px_2px_0px_0px_rgba(255,255,255,1)] hover:shadow-[3px_3px_0px_0px_rgba(232,121,249,1)] hover:scale-[1.02]"
+                    >
+                      <span className="text-[9px] font-black tracking-widest text-white uppercase font-mono block truncate">{sticker.name}</span>
+                      <div className="mt-4 flex items-center justify-between text-[7px] text-gray-400 font-mono w-full border-t border-white/10 pt-1">
+                        <span>{sticker.type.toUpperCase()}</span>
+                        <span style={{ color: sticker.color }} className="font-bold">■ THEME</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* ABA TEXT: CAMADAS DE TEXTO */}
             {activeTab === 'TEXT' && (
               <div className="space-y-4">
@@ -1042,24 +1522,93 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
 
                 {selectedLayer && (
                   <div className="pt-4 border-t border-white/10 space-y-3">
-                    <textarea rows={2} value={selectedLayer.text} onChange={e => handleTextLayerChange(selectedLayer.id, { text: e.target.value })} className="w-full bg-black/50 border border-white/20 rounded p-2 text-white outline-none focus:border-cyan-500" placeholder="Type..." />
+                    <textarea rows={2} value={selectedLayer.text} onChange={e => handleTextLayerChange(selectedLayer.id, { text: e.target.value })} className="w-full bg-black/50 border border-white/20 rounded p-2 text-white outline-none focus:border-cyan-500 text-xs font-mono" placeholder="Escreva o texto aqui..." />
+                    
+                    {/* SELETOR DE FONTE PERSONALIZADO GRANDE */}
+                    <div className="py-2 bg-white/5 px-2 rounded border border-white/5 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[8px] uppercase tracking-wider font-extrabold text-cyan-400">CONFIG DE FONTES</span>
+                        <span className="text-[7px] text-gray-400 font-mono">SUPORTA TODAS DO GOOGLE FONTS</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[7.5px] uppercase font-bold text-gray-500">Presets Ousados</span>
+                          <select 
+                            value={PRESET_FONTS.includes(selectedLayer.font) ? selectedLayer.font : ""} 
+                            onChange={e => {
+                              if (e.target.value) {
+                                handleTextLayerChange(selectedLayer.id, { font: e.target.value });
+                              }
+                            }} 
+                            className="bg-black border border-white/20 rounded p-1 text-[9px] text-white"
+                          >
+                            <option value="">-- Customizar (Digitar) --</option>
+                            {PRESET_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
+                          </select>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[7.5px] uppercase font-bold text-gray-500">Nome da Fonte Google</span>
+                          <input 
+                            type="text" 
+                            value={selectedLayer.font} 
+                            onChange={e => handleTextLayerChange(selectedLayer.id, { font: e.target.value })} 
+                            className="bg-black border border-white/20 rounded p-1 text-[9px] text-cyan-400 font-mono outline-none focus:border-cyan-500" 
+                            placeholder="Ex: Syne, Anton, Unbounded..." 
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-2">
-                      <select value={selectedLayer.font} onChange={e => handleTextLayerChange(selectedLayer.id, { font: e.target.value })} className="bg-black border border-white/20 rounded p-1.5 text-[10px]">
-                        {PRESET_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
-                      </select>
-                      <select value={selectedLayer.blendMode} onChange={e => handleTextLayerChange(selectedLayer.id, { blendMode: e.target.value as any })} className="bg-black border border-white/20 rounded p-1.5 text-[10px]">
-                        {BLEND_MODES.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[7.5px] uppercase font-bold text-gray-500">Blend Mode</span>
+                        <select value={selectedLayer.blendMode} onChange={e => handleTextLayerChange(selectedLayer.id, { blendMode: e.target.value as any })} className="bg-black border border-white/20 rounded p-1.5 text-[10px]">
+                          {BLEND_MODES.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[7.5px] uppercase font-bold text-gray-500">Peso do Texto</span>
+                        <select value={selectedLayer.fontWeight || "900"} onChange={e => handleTextLayerChange(selectedLayer.id, { fontWeight: e.target.value })} className="bg-black border border-white/20 rounded p-1.5 text-[10px]">
+                          <option value="100">100 - Extra Fino</option>
+                          <option value="300">300 - Leve</option>
+                          <option value="400">400 - Normal</option>
+                          <option value="700">700 - Negrito</option>
+                          <option value="800">800 - Extra Negrito</option>
+                          <option value="900">900 - Black (Ultra Ousada)</option>
+                        </select>
+                      </div>
                     </div>
+
                     <div className="grid grid-cols-2 gap-2">
-                      <ControlSlider label="Pos X" value={selectedLayer.posX} min={0} max={100} step={1} onChange={v => handleTextLayerChange(selectedLayer.id, { posX: v })} />
-                      <ControlSlider label="Pos Y" value={selectedLayer.posY} min={0} max={100} step={1} onChange={v => handleTextLayerChange(selectedLayer.id, { posY: v })} />
+                      <ControlSlider label="Pos X (%)" value={selectedLayer.posX} min={0} max={100} step={1} onChange={v => handleTextLayerChange(selectedLayer.id, { posX: v })} />
+                      <ControlSlider label="Pos Y (%)" value={selectedLayer.posY} min={0} max={100} step={1} onChange={v => handleTextLayerChange(selectedLayer.id, { posY: v })} />
                     </div>
-                    <ControlSlider label="Size" value={selectedLayer.size} min={0.5} max={20} step={0.1} onChange={v => handleTextLayerChange(selectedLayer.id, { size: v })} />
-                    <div className="flex gap-2">
-                      <input type="color" value={selectedLayer.color} onChange={e => handleTextLayerChange(selectedLayer.id, { color: e.target.value })} className="w-12 h-6 bg-transparent border border-white/20 rounded cursor-pointer" />
-                      <button onClick={() => handleTextLayerChange(selectedLayer.id, { outline: !selectedLayer.outline })} className={`flex-1 border rounded text-[10px] font-bold ${selectedLayer.outline ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' : 'border-white/10 text-gray-500'}`}>HOLLOW</button>
+
+                    <ControlSlider label="Tamanho Fonte (rem)" value={selectedLayer.size} min={0.5} max={20} step={0.1} onChange={v => handleTextLayerChange(selectedLayer.id, { size: v })} />
+                    
+                    {/* ADICIONADOS CONTROLES DETALHADOS REQUISITADOS */}
+                    <div className="bg-black/30 p-2 border border-white/5 rounded space-y-2">
+                      <span className="text-[8px] uppercase tracking-wider font-bold text-cyan-400 block border-b border-white/10 pb-0.5">Efeitos de Variáveis</span>
+                      <ControlSlider label="Espaçamento (Letter-Spacing px)" value={selectedLayer.letterSpacing !== undefined ? selectedLayer.letterSpacing : 0} min={-10} max={60} step={0.5} onChange={v => handleTextLayerChange(selectedLayer.id, { letterSpacing: v })} />
+                      <ControlSlider label="Rotação (Ângulo °)" value={selectedLayer.rotation !== undefined ? selectedLayer.rotation : 0} min={-180} max={180} step={1} onChange={v => handleTextLayerChange(selectedLayer.id, { rotation: v })} />
+                      <ControlSlider label="Brilho / Glow (px)" value={selectedLayer.glow !== undefined ? selectedLayer.glow : 20} min={0} max={100} step={1} onChange={v => handleTextLayerChange(selectedLayer.id, { glow: v })} />
                     </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[7.5px] uppercase font-bold text-gray-500">Cor</span>
+                        <input type="color" value={selectedLayer.color} onChange={e => handleTextLayerChange(selectedLayer.id, { color: e.target.value })} className="w-full h-8 bg-transparent border border-white/20 rounded cursor-pointer p-0.5" />
+                      </div>
+                      <div className="flex flex-col gap-1 justify-end">
+                        <div className="flex gap-1 h-8">
+                          <button onClick={() => handleTextLayerChange(selectedLayer.id, { outline: !selectedLayer.outline })} className={`flex-1 border rounded text-[8px] font-mono font-black ${selectedLayer.outline ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' : 'border-white/10 text-gray-500'}`}>HOLLOW</button>
+                          <button onClick={() => handleTextLayerChange(selectedLayer.id, { isItalic: !selectedLayer.isItalic })} className={`flex-1 border rounded text-[8px] font-mono font-black ${selectedLayer.isItalic ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400 italic' : 'border-white/10 text-gray-500'}`}>ITALIC</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <ControlSlider label="Opacidade" value={selectedLayer.opacity !== undefined ? selectedLayer.opacity : 1.0} min={0} max={1} step={0.05} onChange={v => handleTextLayerChange(selectedLayer.id, { opacity: v })} />
+
                     <div className="grid grid-cols-3 gap-1">
                       {Object.values(TextAnimType).map(anim => (
                         <button key={anim} onClick={() => handleTextLayerChange(selectedLayer.id, { anim: anim as any })} className={`py-1 border rounded text-[8px] uppercase font-bold ${selectedLayer.anim === anim ? 'bg-cyan-500/30 border-cyan-500 text-white' : 'border-white/10 text-gray-600'}`}>{anim}</button>
@@ -1100,7 +1649,7 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
           </div>
         </div>
       </div>
-    )}
+      
       <input 
         type="file" 
         ref={layerFileInputRef} 
@@ -1115,7 +1664,7 @@ export const Controls: React.FC<ControlsProps> = ({ vjState, setVjState, audioSe
           {notification}
         </div>
       )}
-    </>
+    </div>
   );
 };
 

@@ -18,7 +18,16 @@ export enum ShapeType {
   SENTIMENTAL = 'sentimental',
   CUBE = 'cube',
   PYRAMID = 'pyramid',
-  CYLINDER = 'cylinder'
+  CYLINDER = 'cylinder',
+  CUBE_GRID = 'cube_grid',
+  SPIKY_BALL = 'spiky_ball',
+  HEART = 'heart',
+  ROSE_CURVE = 'rose_curve',
+  MOBIUS_STRIP = 'mobius_strip',
+  SUPERFORMULA = 'superformula',
+  CLIFFORD_ATTRACTOR = 'clifford_attractor',
+  MANDELBULB = 'mandelbulb',
+  SACRED_MANDALA = 'sacred_mandala'
 }
 
 export enum NoiseType {
@@ -83,6 +92,11 @@ export interface TextOverlayItem {
   blendMode: 'normal' | 'overlay' | 'screen' | 'difference' | 'exclusion' | 'multiply' | 'color-dodge';
   outline: boolean;
   opacity: number;
+  letterSpacing?: number;
+  rotation?: number;
+  glow?: number;
+  fontWeight?: string;
+  isItalic?: boolean;
 }
 
 export type AudioSourceType = 'mic' | 'file' | 'mixed';
@@ -116,6 +130,14 @@ export interface LayerItem {
   color?: string;
   isCorpus?: boolean; // If true, this layer acts as a data source for merging
   isCorrupted?: boolean; // If true, this layer will be affected by the corruption engine
+  locked?: boolean;
+  cropLeft?: number;   // 0 to 100
+  cropRight?: number;  // 0 to 100
+  cropTop?: number;    // 0 to 100
+  cropBottom?: number; // 0 to 100
+  scaleX?: number;     // Width multiplier
+  scaleY?: number;     // Height multiplier
+  name?: string;       // Custom name for layers panels
 }
 
 export enum MergeMode {
@@ -206,6 +228,7 @@ export interface VJState {
   showAdvancedPanel: boolean;
   showUI: boolean;
   isRecording: boolean;
+  videoFormat?: 'desktop' | 'mobile';
   showTechnicalOverlay: boolean;
   compressionArtifacts: number;
   datamoshIntensity: number;
@@ -228,6 +251,34 @@ export interface VJState {
   lfos: LFO[];
   stateA: Partial<VJState> | null;
   stateB: Partial<VJState> | null;
+
+  // --- ESCULTURA GEOMETRICA E CONTROLES DJ ---
+  drawingMode: 'points' | 'lines' | 'massive' | 'spiral_lines' | 'wireframe';
+  shape3DScale: number;
+  geomPositionX: number;
+  geomPositionY: number;
+  chaosIntensity: number;
+  noiseFrequency: number;
+  glitchFrequency: number;
+  djColorPalette: 'neon' | 'acid_green' | 'toxic_pink' | 'dark_matter' | 'cyberpunk' | 'vaporwave' | 'monochrome' | 'inferno' | 'default';
+
+  // --- ESCULTOR GEOMÉTRICO (CUSTOM SHAPES & DEFORMATIONS) ---
+  shapeScaleX: number;
+  shapeScaleY: number;
+  shapeScaleZ: number;
+  shapeFreqX: number;
+  shapeFreqY: number;
+  shapeFreqZ: number;
+  shapeModulation: number;
+  shapeTwist: number;
+  shapeSymmetry: number;
+  shapePower: number;
+  shapeNoise: number;
+  mathParamA: number;
+  mathParamB: number;
+  mathParamC: number;
+  mathParamD: number;
+  mouseMode: 'repel' | 'attract' | 'vortex' | 'wave' | 'none';
 }
 
 export interface AudioData {

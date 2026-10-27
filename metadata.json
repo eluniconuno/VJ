@@ -1,7 +1,10 @@
 {
-  "name": "CORRUPTED DATA // RESEARCH ENGINE",
-  "description": "An interactive artistic research tool for exploring data corruption, glitch art, and conceptual data merging. Features audio-reactive particle systems, datamosh feedback loops, and brutalist UI console.",
+  "name": "VYXO_LAB // MULTIMEDIA CANVAS STUDIO",
+  "description": "An interactive dark neobrutalist workspace for multimedia art creation—combining live 3D particles, video collages, images, custom typography fonts, stickers, and real-time visual glitch effects.",
   "requestFramePermissions": [
     "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
 }
